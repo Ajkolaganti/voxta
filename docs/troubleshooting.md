@@ -7,6 +7,24 @@
 - On macOS, confirm Accessibility permission is enabled.
 - Try changing the shortcut in Settings.
 
+If local logs show `EventTapError`, macOS is blocking global keyboard monitoring. Open System Settings -> Privacy & Security -> Accessibility, enable Voxta, then quit and reopen the app. Unsigned local builds may need to be removed and added again after rebuilding.
+
+## `npm run tauri:dev` fails with `failed to get cargo metadata`
+
+The Tauri CLI could not find Cargo. Install Rust, then open a new terminal:
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+cargo --version
+```
+
+Then rerun:
+
+```bash
+npm run tauri:dev
+```
+
 ## The app cannot hear the microphone
 
 - Confirm microphone permission.

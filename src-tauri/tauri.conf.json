@@ -67,10 +67,5 @@
       "digestAlgorithm": "sha256",
       "timestampUrl": ""
     }
-  },
-  "plugins": {
-    "autostart": {
-      "macosLaunchAgent": true
-    }
   }
 }
