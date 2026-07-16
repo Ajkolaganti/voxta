@@ -21,9 +21,12 @@ Backend:
 - `src-tauri/src/permissions`: permission status model.
 - `src-tauri/src/platform`: macOS, Windows, unsupported platform adapters.
 - `src-tauri/src/runtime`: dictation state orchestration.
+- `src-tauri/src/streaming`: live preview chunking, overlap, and stale-session safeguards.
 - `src-tauri/src/text_injection`: direct insertion and clipboard fallback.
 - `src-tauri/src/transcription`: transcript cleanup and whisper.cpp engine.
 - `src-tauri/src/tray`: menu-bar/system-tray controls.
+- `src-tauri/src/voice_commands`: deterministic command parsing, execution, and history.
+- `src-tauri/src/ai_cleanup`: optional cleanup providers and secure-key access.
 
 ## Runtime Flow
 
@@ -32,16 +35,20 @@ Backend:
 3. Focus snapshot is captured.
 4. Audio worker starts a `cpal` microphone stream.
 5. Overlay shows `Listening...`.
-6. Shortcut key-up sends `ShortcutEvent::Stop`.
-7. Audio worker stops and returns an in-memory audio buffer.
-8. Empty or silent recordings are discarded.
-9. Runtime moves `Recording -> Transcribing`.
-10. `WhisperCppEngine` transcribes with the selected local model.
-11. Deterministic cleanup is applied.
-12. Runtime moves `Transcribing -> Inserting`.
-13. Focus is restored where supported.
-14. Text is inserted using direct mode or clipboard fallback.
-15. Runtime returns to `Idle`.
+6. If enabled, streaming preview periodically snapshots the in-memory recording, transcribes a bounded overlapping chunk, and updates only the overlay.
+7. Shortcut key-up sends `ShortcutEvent::Stop`.
+8. Streaming preview is cancelled and stale preview results are ignored.
+9. Audio worker stops and returns the complete in-memory audio buffer.
+10. Empty or silent recordings are discarded.
+11. Runtime moves `Recording -> Transcribing`.
+12. `WhisperCppEngine` transcribes the complete recording with the selected local model.
+13. Runtime moves `Transcribing -> ApplyingCommands` and deterministic voice commands are applied to the current dictation buffer.
+14. If enabled, runtime moves to `CleaningUp` and sends the command-processed final text to the selected cleanup provider.
+15. Cleanup failures fall back to the original local transcription.
+16. Runtime moves to `Inserting`.
+17. Focus is restored where supported.
+18. Text is inserted using direct mode or clipboard fallback.
+19. Runtime returns to `Idle`.
 
 Escape during recording sends `ShortcutEvent::Cancel`, drops the in-memory recording, and returns to `Idle`.
 
@@ -51,7 +58,10 @@ Valid transitions:
 
 - `Idle -> Recording`
 - `Recording -> Transcribing`
-- `Transcribing -> Inserting`
+- `Transcribing -> ApplyingCommands`
+- `ApplyingCommands -> CleaningUp`
+- `ApplyingCommands -> Inserting`
+- `CleaningUp -> Inserting`
 - `Inserting -> Idle`
 - `Recording -> Cancelled -> Idle`
 - `Any state -> Error -> Idle`

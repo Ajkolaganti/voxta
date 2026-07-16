@@ -46,6 +46,28 @@ npm run tauri:dev
 - Confirm the model checksum passes.
 - If building from source, install CMake and build with the default `whisper` feature.
 
+## Live preview does not appear
+
+- Confirm Enable live transcription preview is on in Settings.
+- Use the Fast streaming quality if the selected model is too slow.
+- The app may skip preview chunks to avoid queueing work; final transcription should still run after release.
+- If the overlay says live preview is unavailable, continue testing final insertion first.
+
+## Voice commands are typed literally
+
+- Confirm Enable voice commands is on.
+- In the default Explicit prefix mode, say the configured prefix before the command, for example `Voxta new line`.
+- Use the Test command parser in Settings to confirm the phrase is recognized.
+- Natural-phrase mode recognizes commands without a prefix and can be easier to trigger accidentally.
+
+## AI cleanup does not run
+
+- Confirm AI cleanup is enabled.
+- Confirm the provider is not None.
+- For Ollama, confirm Ollama is running and that the configured model is installed.
+- For an OpenAI-compatible endpoint, confirm the base URL, model, API key, and timeout.
+- Cleanup failures do not block dictation; Voxta inserts the original local transcription and shows a warning.
+
 ## Build fails on whisper-rs-sys
 
 Install CMake.

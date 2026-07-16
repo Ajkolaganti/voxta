@@ -22,7 +22,9 @@ Include:
 
 - No cloud transcription.
 - No telemetry by default.
-- No API keys.
+- No API keys are required for core dictation.
+- Optional remote cleanup API keys must use operating-system credential storage and must not be logged.
+- Optional remote cleanup must be user-enabled and must clearly disclose that final transcript text leaves the device.
 - No hidden diagnostic uploads.
 - Model downloads are checksum-verified.
 - Voxta should not run as Administrator or root.
