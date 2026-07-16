@@ -1,0 +1,65 @@
+[package]
+name = "voxta"
+version = "0.1.0"
+description = "Voxta — Private voice typing that works everywhere."
+authors = ["Ajay Kolaganti"]
+license = "MIT"
+repository = "https://github.com/voxta/voxta"
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "voxta_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "voxta"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.0.4", features = [] }
+
+[features]
+default = ["whisper"]
+whisper = ["dep:whisper-rs"]
+
+[dependencies]
+anyhow = "1.0.95"
+arboard = "3.4.1"
+async-trait = "0.1.83"
+cpal = "0.15.3"
+dirs-next = "2.0.0"
+enigo = "0.2.1"
+futures-util = "0.3.31"
+parking_lot = "0.12.3"
+reqwest = { version = "0.12.12", default-features = false, features = ["rustls-tls", "stream"] }
+rdev = { version = "0.5.3", features = ["unstable_grab"] }
+serde = { version = "1.0.217", features = ["derive"] }
+serde_json = "1.0.138"
+sha1 = "0.10.6"
+sha2 = "0.10.8"
+tauri = { version = "2.2.5", features = ["tray-icon", "image-png", "macos-private-api"] }
+tauri-plugin-autostart = "2.2.0"
+tauri-plugin-opener = "2.2.5"
+tempfile = "3.15.0"
+thiserror = "2.0.11"
+tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread", "sync", "time"] }
+url = "2.5.4"
+uuid = { version = "1.12.1", features = ["v4"] }
+whisper-rs = { version = "0.13.2", optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+cocoa = "0.25.0"
+core-foundation = "0.9.4"
+core-graphics = "0.23.2"
+objc = "0.2.7"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.58.0", features = [
+  "Win32_Foundation",
+  "Win32_System_Com",
+  "Win32_System_DataExchange",
+  "Win32_UI_Accessibility",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_UI_WindowsAndMessaging"
+] }

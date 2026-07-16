@@ -1,0 +1,415 @@
+:root {
+  color-scheme: light dark;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #1e2228;
+  background: #f6f7f9;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+select,
+textarea,
+input {
+  font: inherit;
+}
+
+button,
+select,
+textarea,
+input[type="checkbox"],
+input[type="radio"] {
+  outline-offset: 3px;
+}
+
+button:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+input:focus-visible {
+  outline: 2px solid #2f6fed;
+}
+
+.shell {
+  width: min(1040px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 28px 0 40px;
+}
+
+.loading-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+}
+
+.titlebar,
+.toolbar,
+.section-heading,
+.footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.titlebar {
+  margin-bottom: 18px;
+}
+
+.eyebrow {
+  margin: 0 0 2px;
+  color: #69707d;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 0;
+  font-size: 1.75rem;
+  letter-spacing: 0;
+}
+
+h2 {
+  margin-bottom: 12px;
+  font-size: 1rem;
+  letter-spacing: 0;
+}
+
+a {
+  color: #1d5fd0;
+}
+
+.panel {
+  margin-bottom: 16px;
+  padding: 18px;
+  border: 1px solid #d9dde5;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgb(20 25 35 / 4%);
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+}
+
+.grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid #cdd4df;
+  border-radius: 999px;
+  color: #253041;
+  background: #edf4ff;
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.banner {
+  padding: 12px 14px;
+  border-radius: 8px;
+}
+
+.banner.error {
+  border: 1px solid #e6a3a3;
+  color: #8e1f1f;
+  background: #fff0f0;
+}
+
+.banner.info {
+  border: 1px solid #a9c5ed;
+  color: #173f7a;
+  background: #edf5ff;
+}
+
+.hint {
+  color: #626b79;
+  font-size: 0.92rem;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 6px;
+  color: #46505f;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+select,
+textarea {
+  width: 100%;
+  border: 1px solid #c8ced8;
+  border-radius: 8px;
+  background: #fff;
+  color: #1f2530;
+}
+
+select {
+  min-height: 40px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+}
+
+textarea {
+  min-height: 132px;
+  resize: vertical;
+  padding: 12px;
+  line-height: 1.45;
+}
+
+button {
+  min-height: 36px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+button.primary {
+  color: #fff;
+  background: #2f6fed;
+}
+
+button.secondary {
+  border-color: #c8ced8;
+  color: #1f2530;
+  background: #fff;
+}
+
+button.danger {
+  color: #9b2226;
+}
+
+.shortcut-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.shortcut-field output {
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 1px solid #c8ced8;
+  border-radius: 8px;
+  background: #f9fafc;
+  font-weight: 700;
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+}
+
+.permission-row,
+.model-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid #eceff4;
+}
+
+.permission-row:first-of-type,
+.model-row:first-of-type {
+  border-top: 0;
+}
+
+.permission-row div,
+.model-row label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.permission-row span,
+.model-row small {
+  display: block;
+  color: #657080;
+}
+
+.model-row label {
+  flex: 1;
+}
+
+.row-actions {
+  flex: 0 0 auto;
+}
+
+.download-progress {
+  display: inline-flex;
+  min-width: 64px;
+  justify-content: flex-end;
+  color: #425066;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.about dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.about dl div,
+.privacy-grid div {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.privacy-grid {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.about dt,
+.privacy-grid dt {
+  color: #657080;
+  font-weight: 700;
+}
+
+.about dd,
+.privacy-grid dd {
+  margin: 0;
+}
+
+.overlay {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 196px;
+  padding: 12px 14px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 999px;
+  color: #fff;
+  background: rgb(21 25 32 / 88%);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 24%);
+  user-select: none;
+}
+
+.mic-dot {
+  display: flex;
+  align-items: end;
+  gap: 3px;
+  width: 24px;
+  height: 22px;
+}
+
+.mic-dot span {
+  display: block;
+  width: 5px;
+  min-height: 6px;
+  border-radius: 999px;
+  background: #66e0a3;
+  animation: level 850ms ease-in-out infinite;
+}
+
+.mic-dot span:nth-child(2) {
+  animation-delay: 120ms;
+}
+
+.mic-dot span:nth-child(3) {
+  animation-delay: 240ms;
+}
+
+.overlay-transcribing .mic-dot span {
+  background: #ffd166;
+}
+
+.overlay-error .mic-dot span {
+  background: #ff7777;
+  animation: none;
+}
+
+@keyframes level {
+  0%,
+  100% {
+    height: 6px;
+  }
+  50% {
+    height: 20px;
+  }
+}
+
+@media (max-width: 720px) {
+  .shell {
+    width: min(100vw - 20px, 1040px);
+    padding-top: 16px;
+  }
+
+  .grid.two,
+  .titlebar,
+  .toolbar,
+  .footer-actions {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .shortcut-field {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color: #edf1f7;
+    background: #12151a;
+  }
+
+  .panel,
+  select,
+  textarea,
+  button.secondary,
+  .shortcut-field output {
+    border-color: #303845;
+    color: #eef3fb;
+    background: #1a1f27;
+  }
+
+  .eyebrow,
+  .hint,
+  .permission-row span,
+  .model-row small,
+  .about dt {
+    color: #a8b0bd;
+  }
+
+  .status-pill {
+    border-color: #34404e;
+    color: #e7eef8;
+    background: #20324a;
+  }
+
+  a {
+    color: #7fb0ff;
+  }
+}
