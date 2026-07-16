@@ -14,8 +14,107 @@ pub enum InsertionMode {
     Clipboard,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub enum StreamingQuality {
+    Fast,
+    #[default]
+    Balanced,
+    Accurate,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct StreamingConfig {
+    pub enabled: bool,
+    pub interval_ms: u64,
+    pub quality: StreamingQuality,
+}
+
+impl Default for StreamingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            interval_ms: 750,
+            quality: StreamingQuality::Balanced,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum VoiceCommandMode {
+    Natural,
+    #[default]
+    Prefix,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct VoiceCommandConfig {
+    pub enabled: bool,
+    pub mode: VoiceCommandMode,
+    pub prefix: String,
+}
+
+impl Default for VoiceCommandConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            mode: VoiceCommandMode::Prefix,
+            prefix: "Voxta".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AiCleanupProvider {
+    #[default]
+    None,
+    Ollama,
+    OpenAiCompatible,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CleanupStyle {
+    #[default]
+    Light,
+    Professional,
+    Casual,
+    Concise,
+    Custom,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AiCleanupConfig {
+    pub enabled: bool,
+    pub provider: AiCleanupProvider,
+    pub endpoint: String,
+    pub model: String,
+    pub style: CleanupStyle,
+    pub custom_instructions: String,
+    pub timeout_seconds: u64,
+}
+
+impl Default for AiCleanupConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            provider: AiCleanupProvider::None,
+            endpoint: "http://127.0.0.1:11434".to_string(),
+            model: String::new(),
+            style: CleanupStyle::Light,
+            custom_instructions: String::new(),
+            timeout_seconds: 8,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 pub struct AppConfig {
     pub enabled: bool,
     pub shortcut: String,
@@ -28,6 +127,9 @@ pub struct AppConfig {
     pub trailing_space: bool,
     pub insertion_mode: InsertionMode,
     pub onboarding_complete: bool,
+    pub streaming: StreamingConfig,
+    pub voice_commands: VoiceCommandConfig,
+    pub ai_cleanup: AiCleanupConfig,
 }
 
 impl Default for AppConfig {
@@ -44,6 +146,9 @@ impl Default for AppConfig {
             trailing_space: true,
             insertion_mode: InsertionMode::Auto,
             onboarding_complete: false,
+            streaming: StreamingConfig::default(),
+            voice_commands: VoiceCommandConfig::default(),
+            ai_cleanup: AiCleanupConfig::default(),
         }
     }
 }
@@ -62,6 +167,29 @@ impl AppConfig {
         }
         if self.language.trim().is_empty() {
             self.language = "auto".to_string();
+        }
+        self.streaming.interval_ms = self.streaming.interval_ms.clamp(500, 2_000);
+        if self.voice_commands.prefix.trim().is_empty() {
+            self.voice_commands.prefix = "Voxta".to_string();
+        } else {
+            self.voice_commands.prefix = self.voice_commands.prefix.trim().to_string();
+        }
+        self.ai_cleanup.timeout_seconds = self.ai_cleanup.timeout_seconds.clamp(1, 30);
+        if self.ai_cleanup.provider == AiCleanupProvider::None {
+            self.ai_cleanup.enabled = false;
+        }
+        if self.ai_cleanup.endpoint.trim().is_empty() {
+            self.ai_cleanup.endpoint = match self.ai_cleanup.provider {
+                AiCleanupProvider::Ollama => "http://127.0.0.1:11434".to_string(),
+                _ => String::new(),
+            };
+        } else {
+            self.ai_cleanup.endpoint = self
+                .ai_cleanup
+                .endpoint
+                .trim()
+                .trim_end_matches('/')
+                .to_string();
         }
         self
     }

@@ -1,3 +1,4 @@
+pub mod ai_cleanup;
 pub mod audio;
 pub mod commands;
 pub mod config;
@@ -9,9 +10,11 @@ pub mod permissions;
 pub mod platform;
 pub mod runtime;
 pub mod state;
+pub mod streaming;
 pub mod text_injection;
 pub mod transcription;
 pub mod tray;
+pub mod voice_commands;
 
 use crate::{
     config::{AppConfig, ConfigStore},
@@ -69,7 +72,11 @@ pub fn run() {
             commands::get_permission_status,
             commands::open_permission_settings,
             commands::test_microphone,
-            commands::cleanup_test_transcript
+            commands::cleanup_test_transcript,
+            commands::test_voice_command_parser,
+            commands::cleanup_provider_status,
+            commands::save_cleanup_api_key,
+            commands::has_cleanup_api_key
         ])
         .setup(|app| {
             let state = app.state::<AppState>();

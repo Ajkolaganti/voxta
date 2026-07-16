@@ -7,6 +7,8 @@ pub enum RecordingState {
     Idle,
     Recording,
     Transcribing,
+    ApplyingCommands,
+    CleaningUp,
     Inserting,
     Cancelled,
     Error,
@@ -58,12 +60,40 @@ impl RecordingStateMachine {
 
     pub fn start_inserting(&mut self) -> AppResult<()> {
         match self.state {
-            RecordingState::Transcribing => {
+            RecordingState::Transcribing
+            | RecordingState::ApplyingCommands
+            | RecordingState::CleaningUp => {
                 self.state = RecordingState::Inserting;
                 Ok(())
             }
             _ => Err(AppError::State(format!(
                 "cannot insert while {:?}",
+                self.state
+            ))),
+        }
+    }
+
+    pub fn start_applying_commands(&mut self) -> AppResult<()> {
+        match self.state {
+            RecordingState::Transcribing => {
+                self.state = RecordingState::ApplyingCommands;
+                Ok(())
+            }
+            _ => Err(AppError::State(format!(
+                "cannot apply commands while {:?}",
+                self.state
+            ))),
+        }
+    }
+
+    pub fn start_cleaning_up(&mut self) -> AppResult<()> {
+        match self.state {
+            RecordingState::ApplyingCommands | RecordingState::Transcribing => {
+                self.state = RecordingState::CleaningUp;
+                Ok(())
+            }
+            _ => Err(AppError::State(format!(
+                "cannot clean up while {:?}",
                 self.state
             ))),
         }
@@ -102,6 +132,10 @@ mod tests {
         assert_eq!(machine.state(), RecordingState::Recording);
         machine.start_transcribing().unwrap();
         assert_eq!(machine.state(), RecordingState::Transcribing);
+        machine.start_applying_commands().unwrap();
+        assert_eq!(machine.state(), RecordingState::ApplyingCommands);
+        machine.start_cleaning_up().unwrap();
+        assert_eq!(machine.state(), RecordingState::CleaningUp);
         machine.start_inserting().unwrap();
         assert_eq!(machine.state(), RecordingState::Inserting);
         machine.finish();

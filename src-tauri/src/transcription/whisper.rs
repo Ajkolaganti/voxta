@@ -4,7 +4,7 @@ use crate::{
     config::AppConfig,
     error::{AppError, AppResult},
     models::ModelManager,
-    transcription::cleanup::cleanup_transcript,
+    transcription::cleanup::normalize_spaces,
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
@@ -100,7 +100,7 @@ impl TranscriptionEngine for WhisperCppEngine {
                 text.push(' ');
             }
 
-            Ok(cleanup_transcript(&text, &config))
+            Ok(normalize_spaces(text.trim()).trim().to_string())
         })
         .await
         .map_err(|err| AppError::Transcription(format!("transcription task failed: {err}")))?

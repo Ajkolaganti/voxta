@@ -4,7 +4,8 @@ import type {
   MicrophoneDevice,
   ModelInfo,
   PermissionStatus,
-  RuntimeStatus
+  RuntimeStatus,
+  CleanupProviderStatus
 } from "../types/voxta";
 
 const isTauri = Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
@@ -20,7 +21,26 @@ const defaultConfig: VoxtaConfig = {
   spokenCommands: true,
   trailingSpace: true,
   insertionMode: "auto",
-  onboardingComplete: false
+  onboardingComplete: false,
+  streaming: {
+    enabled: true,
+    intervalMs: 750,
+    quality: "balanced"
+  },
+  voiceCommands: {
+    enabled: true,
+    mode: "prefix",
+    prefix: "Voxta"
+  },
+  aiCleanup: {
+    enabled: false,
+    provider: "none",
+    endpoint: "http://127.0.0.1:11434",
+    model: "",
+    style: "light",
+    customInstructions: "",
+    timeoutSeconds: 8
+  }
 };
 
 const browserPreviewModels: ModelInfo[] = [
@@ -128,7 +148,16 @@ export const voxtaApi = {
     call<void>("open_permission_settings", { permission }, undefined),
   testMicrophone: (microphoneId: string) =>
     call<string>("test_microphone", { microphoneId }, "Microphone input detected."),
-  testDictation: (text: string) => call<string>("cleanup_test_transcript", { text }, text)
+  testDictation: (text: string) => call<string>("cleanup_test_transcript", { text }, text),
+  testVoiceCommands: (text: string) => call<string>("test_voice_command_parser", { text }, text),
+  cleanupProviderStatus: () =>
+    call<CleanupProviderStatus>("cleanup_provider_status", undefined, {
+      available: false,
+      message: "Provider checks are available in the desktop app.",
+      models: []
+    }),
+  saveCleanupApiKey: (apiKey: string) => call<boolean>("save_cleanup_api_key", { apiKey }, false),
+  hasCleanupApiKey: () => call<boolean>("has_cleanup_api_key", undefined, false)
 };
 
 export { defaultConfig };

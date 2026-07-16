@@ -1,6 +1,6 @@
 [package]
 name = "voxta"
-version = "0.1.0"
+version = "0.2.0"
 description = "Voxta — Private voice typing that works everywhere."
 authors = ["Ajay Kolaganti"]
 license = "MIT"

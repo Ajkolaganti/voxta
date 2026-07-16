@@ -177,6 +177,9 @@ enum AudioCommand {
         device_id: String,
         reply: Sender<AppResult<()>>,
     },
+    Snapshot {
+        reply: Sender<AppResult<Option<AudioBuffer>>>,
+    },
     Stop {
         reply: Sender<AppResult<AudioBuffer>>,
     },
@@ -203,6 +206,10 @@ impl AudioRecorderHandle {
                                 session = Some(next_session);
                             });
                         let _ = reply.send(result);
+                    }
+                    AudioCommand::Snapshot { reply } => {
+                        let result = session.as_ref().map(RecordingSession::snapshot);
+                        let _ = reply.send(Ok(result));
                     }
                     AudioCommand::Stop { reply } => {
                         let result = session
@@ -234,6 +241,16 @@ impl AudioRecorderHandle {
             .map_err(|err| AppError::Audio(format!("audio worker did not respond: {err}")))?
     }
 
+    pub fn snapshot(&self) -> AppResult<Option<AudioBuffer>> {
+        let (reply, response) = mpsc::channel();
+        self.sender
+            .send(AudioCommand::Snapshot { reply })
+            .map_err(|err| AppError::Audio(format!("audio worker is unavailable: {err}")))?;
+        response
+            .recv()
+            .map_err(|err| AppError::Audio(format!("audio worker did not respond: {err}")))?
+    }
+
     pub fn stop(&self) -> AppResult<AudioBuffer> {
         let (reply, response) = mpsc::channel();
         self.sender
@@ -258,13 +275,17 @@ pub struct RecordingSession {
 }
 
 impl RecordingSession {
-    pub fn stop(mut self) -> AudioBuffer {
-        self.stream.take();
+    pub fn snapshot(&self) -> AudioBuffer {
         AudioBuffer {
             sample_rate: self.sample_rate,
             channels: self.channels,
             samples: self.samples.lock().clone(),
         }
+    }
+
+    pub fn stop(mut self) -> AudioBuffer {
+        self.stream.take();
+        self.snapshot()
     }
 
     pub fn elapsed(&self) -> Duration {

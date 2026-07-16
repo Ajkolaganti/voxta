@@ -3,10 +3,6 @@ use crate::config::AppConfig;
 pub fn cleanup_transcript(input: &str, config: &AppConfig) -> String {
     let mut text = normalize_spaces(input.trim());
 
-    if config.spoken_commands {
-        text = apply_spoken_commands(&text);
-    }
-
     text = capitalize_first_letter(&text);
 
     if config.trailing_space && !text.is_empty() && !text.ends_with(char::is_whitespace) {
@@ -130,5 +126,17 @@ mod tests {
     fn cleanup_capitalizes_sentence_and_trailing_space() {
         let config = AppConfig::default();
         assert_eq!(cleanup_transcript(" hello world ", &config), "Hello world ");
+    }
+
+    #[test]
+    fn cleanup_does_not_apply_voice_commands() {
+        let config = AppConfig {
+            trailing_space: false,
+            ..AppConfig::default()
+        };
+        assert_eq!(
+            cleanup_transcript("hello new line world", &config),
+            "Hello new line world"
+        );
     }
 }

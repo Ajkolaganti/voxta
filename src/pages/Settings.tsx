@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import type { useVoxta } from "../stores/useVoxta";
 import { voxtaApi } from "../services/voxta";
 import { ShortcutField } from "../components/ShortcutField";
@@ -22,6 +23,33 @@ const languages = [
 ];
 
 export function Settings({ store }: Props) {
+  const [commandTest, setCommandTest] = useState("Voxta new line continue here");
+  const [commandResult, setCommandResult] = useState("");
+  const [providerMessage, setProviderMessage] = useState("");
+  const [apiKey, setApiKey] = useState("");
+
+  const cleanupPrivacy = useMemo(() => {
+    if (!store.config.aiCleanup.enabled || store.config.aiCleanup.provider === "none") {
+      return {
+        cleanup: "Off",
+        leavesDevice: "No",
+        detail: "Speech recognition: Local"
+      };
+    }
+    if (store.config.aiCleanup.provider === "ollama") {
+      return {
+        cleanup: "Local through Ollama",
+        leavesDevice: "No",
+        detail: "Speech recognition: Local"
+      };
+    }
+    return {
+      cleanup: "Remote",
+      leavesDevice: "Yes",
+      detail: "Speech recognition: Local"
+    };
+  }, [store.config.aiCleanup.enabled, store.config.aiCleanup.provider]);
+
   return (
     <main className="shell">
       <header className="titlebar">
@@ -82,6 +110,14 @@ export function Settings({ store }: Props) {
             <dt>Cloud transcription</dt>
             <dd>Never</dd>
           </div>
+          <div>
+            <dt>AI cleanup</dt>
+            <dd>{cleanupPrivacy.cleanup}</dd>
+          </div>
+          <div>
+            <dt>Text leaves device</dt>
+            <dd>{cleanupPrivacy.leavesDevice}</dd>
+          </div>
         </dl>
         <p className="hint">Automatic updates are not implemented in this early preview.</p>
       </section>
@@ -138,6 +174,337 @@ export function Settings({ store }: Props) {
           await store.refresh();
         }}
       />
+
+      <section className="panel">
+        <div className="section-heading">
+          <div>
+            <h2>Smart Dictation</h2>
+            <p className="hint">Preview features for live local feedback, local voice commands, and optional cleanup.</p>
+          </div>
+        </div>
+
+        <div className="smart-grid">
+          <div className="smart-block">
+            <h3>Live Preview</h3>
+            <label className="switch-row">
+              <input
+                type="checkbox"
+                checked={store.config.streaming.enabled}
+                onChange={(event) =>
+                  store.saveConfig({
+                    streaming: { ...store.config.streaming, enabled: event.currentTarget.checked }
+                  })
+                }
+              />
+              <span>Enable live transcription preview</span>
+            </label>
+            <label className="field-label" htmlFor="preview-interval">
+              Preview interval
+            </label>
+            <input
+              id="preview-interval"
+              type="number"
+              min={500}
+              max={2000}
+              step={50}
+              value={store.config.streaming.intervalMs}
+              onChange={(event) =>
+                store.saveConfig({
+                  streaming: {
+                    ...store.config.streaming,
+                    intervalMs: Number(event.currentTarget.value)
+                  }
+                })
+              }
+            />
+            <label className="field-label" htmlFor="streaming-quality">
+              Streaming quality
+            </label>
+            <select
+              id="streaming-quality"
+              value={store.config.streaming.quality}
+              onChange={(event) =>
+                store.saveConfig({
+                  streaming: {
+                    ...store.config.streaming,
+                    quality: event.currentTarget.value as typeof store.config.streaming.quality
+                  }
+                })
+              }
+            >
+              <option value="fast">Fast</option>
+              <option value="balanced">Balanced</option>
+              <option value="accurate">Accurate</option>
+            </select>
+          </div>
+
+          <div className="smart-block">
+            <h3>Voice Commands</h3>
+            <label className="switch-row">
+              <input
+                type="checkbox"
+                checked={store.config.voiceCommands.enabled}
+                onChange={(event) =>
+                  store.saveConfig({
+                    voiceCommands: {
+                      ...store.config.voiceCommands,
+                      enabled: event.currentTarget.checked
+                    }
+                  })
+                }
+              />
+              <span>Enable voice commands</span>
+            </label>
+            <label className="field-label" htmlFor="command-mode">
+              Command phrase style
+            </label>
+            <select
+              id="command-mode"
+              value={store.config.voiceCommands.mode}
+              onChange={(event) =>
+                store.saveConfig({
+                  voiceCommands: {
+                    ...store.config.voiceCommands,
+                    mode: event.currentTarget.value as typeof store.config.voiceCommands.mode
+                  }
+                })
+              }
+            >
+              <option value="prefix">Explicit prefix</option>
+              <option value="natural">Natural phrases</option>
+            </select>
+            <label className="field-label" htmlFor="command-prefix">
+              Command prefix
+            </label>
+            <input
+              id="command-prefix"
+              type="text"
+              value={store.config.voiceCommands.prefix}
+              onChange={(event) =>
+                store.saveConfig({
+                  voiceCommands: {
+                    ...store.config.voiceCommands,
+                    prefix: event.currentTarget.value
+                  }
+                })
+              }
+            />
+            <details>
+              <summary>Supported commands</summary>
+              <p className="hint">
+                new line, new paragraph, delete last word, delete last sentence, undo, clear dictation,
+                cancel dictation.
+              </p>
+            </details>
+            <label className="field-label" htmlFor="command-test">
+              Test command parser
+            </label>
+            <input
+              id="command-test"
+              type="text"
+              value={commandTest}
+              onChange={(event) => setCommandTest(event.currentTarget.value)}
+            />
+            <button
+              type="button"
+              className="secondary"
+              onClick={async () => setCommandResult(await voxtaApi.testVoiceCommands(commandTest))}
+            >
+              Test parser
+            </button>
+            {commandResult && <p className="hint">Result: {commandResult}</p>}
+          </div>
+        </div>
+
+        <details className="advanced-panel">
+          <summary>AI Cleanup</summary>
+          <div className="smart-grid">
+            <div className="smart-block">
+              <label className="switch-row">
+                <input
+                  type="checkbox"
+                  checked={store.config.aiCleanup.enabled}
+                  onChange={(event) =>
+                    store.saveConfig({
+                      aiCleanup: {
+                        ...store.config.aiCleanup,
+                        enabled: event.currentTarget.checked,
+                        provider: event.currentTarget.checked
+                          ? store.config.aiCleanup.provider
+                          : "none"
+                      }
+                    })
+                  }
+                />
+                <span>Enable AI cleanup</span>
+              </label>
+              <label className="field-label" htmlFor="cleanup-provider">
+                Provider
+              </label>
+              <select
+                id="cleanup-provider"
+                value={store.config.aiCleanup.provider}
+                onChange={(event) =>
+                  store.saveConfig({
+                    aiCleanup: {
+                      ...store.config.aiCleanup,
+                      provider: event.currentTarget.value as typeof store.config.aiCleanup.provider,
+                      enabled: event.currentTarget.value !== "none"
+                    }
+                  })
+                }
+              >
+                <option value="none">None</option>
+                <option value="ollama">Ollama</option>
+                <option value="openAiCompatible">OpenAI-compatible endpoint</option>
+              </select>
+              {store.config.aiCleanup.provider === "openAiCompatible" && (
+                <p className="banner error">
+                  Remote cleanup sends the final transcript to your configured endpoint.
+                </p>
+              )}
+              <label className="field-label" htmlFor="cleanup-endpoint">
+                Endpoint
+              </label>
+              <input
+                id="cleanup-endpoint"
+                type="url"
+                value={store.config.aiCleanup.endpoint}
+                onChange={(event) =>
+                  store.saveConfig({
+                    aiCleanup: {
+                      ...store.config.aiCleanup,
+                      endpoint: event.currentTarget.value
+                    }
+                  })
+                }
+              />
+              <label className="field-label" htmlFor="cleanup-model">
+                Model
+              </label>
+              <input
+                id="cleanup-model"
+                type="text"
+                value={store.config.aiCleanup.model}
+                onChange={(event) =>
+                  store.saveConfig({
+                    aiCleanup: {
+                      ...store.config.aiCleanup,
+                      model: event.currentTarget.value
+                    }
+                  })
+                }
+              />
+              {store.config.aiCleanup.provider === "openAiCompatible" && (
+                <>
+                  <label className="field-label" htmlFor="cleanup-key">
+                    API key
+                  </label>
+                  <input
+                    id="cleanup-key"
+                    type="password"
+                    value={apiKey}
+                    onChange={(event) => setApiKey(event.currentTarget.value)}
+                  />
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={async () => {
+                      const saved = await voxtaApi.saveCleanupApiKey(apiKey);
+                      setProviderMessage(saved ? "API key saved securely." : "API key was not saved.");
+                      setApiKey("");
+                    }}
+                  >
+                    Save key securely
+                  </button>
+                </>
+              )}
+            </div>
+
+            <div className="smart-block">
+              <label className="field-label" htmlFor="cleanup-style">
+                Cleanup style
+              </label>
+              <select
+                id="cleanup-style"
+                value={store.config.aiCleanup.style}
+                onChange={(event) =>
+                  store.saveConfig({
+                    aiCleanup: {
+                      ...store.config.aiCleanup,
+                      style: event.currentTarget.value as typeof store.config.aiCleanup.style
+                    }
+                  })
+                }
+              >
+                <option value="light">Light cleanup</option>
+                <option value="professional">Professional</option>
+                <option value="casual">Casual</option>
+                <option value="concise">Concise</option>
+                <option value="custom">Custom instructions</option>
+              </select>
+              <label className="field-label" htmlFor="cleanup-custom">
+                Custom instructions
+              </label>
+              <textarea
+                id="cleanup-custom"
+                value={store.config.aiCleanup.customInstructions}
+                onChange={(event) =>
+                  store.saveConfig({
+                    aiCleanup: {
+                      ...store.config.aiCleanup,
+                      customInstructions: event.currentTarget.value
+                    }
+                  })
+                }
+              />
+              <label className="field-label" htmlFor="cleanup-timeout">
+                Timeout seconds
+              </label>
+              <input
+                id="cleanup-timeout"
+                type="number"
+                min={1}
+                max={30}
+                value={store.config.aiCleanup.timeoutSeconds}
+                onChange={(event) =>
+                  store.saveConfig({
+                    aiCleanup: {
+                      ...store.config.aiCleanup,
+                      timeoutSeconds: Number(event.currentTarget.value)
+                    }
+                  })
+                }
+              />
+              <button
+                type="button"
+                className="secondary"
+                onClick={async () => {
+                  const status = await voxtaApi.cleanupProviderStatus();
+                  setProviderMessage(`${status.message}${status.models.length ? ` Models: ${status.models.join(", ")}` : ""}`);
+                }}
+              >
+                Test provider
+              </button>
+              <dl className="privacy-grid compact">
+                <div>
+                  <dt>Speech recognition</dt>
+                  <dd>Local</dd>
+                </div>
+                <div>
+                  <dt>AI cleanup</dt>
+                  <dd>{cleanupPrivacy.cleanup}</dd>
+                </div>
+                <div>
+                  <dt>Text leaves device</dt>
+                  <dd>{cleanupPrivacy.leavesDevice}</dd>
+                </div>
+              </dl>
+              {providerMessage && <p className="hint">{providerMessage}</p>}
+            </div>
+          </div>
+        </details>
+      </section>
 
       <section className="grid two">
         <div className="panel">
@@ -234,7 +601,7 @@ export function Settings({ store }: Props) {
         <dl>
           <div>
             <dt>Version</dt>
-            <dd>0.1.0</dd>
+            <dd>0.2.0</dd>
           </div>
           <div>
             <dt>Repository</dt>
