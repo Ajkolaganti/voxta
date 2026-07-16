@@ -83,14 +83,20 @@ pub fn run() {
             start_hotkey_loop(state.config.clone(), state.runtime.clone());
 
             let background = env::args().any(|arg| arg == "--background");
-            if !background && !state.config.read().onboarding_complete {
+            if !background {
                 tray::show_settings(app.handle());
             }
 
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Voxta");
+        .build(tauri::generate_context!())
+        .expect("error while building Voxta")
+        .run(|app, event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = event {
+                tray::show_settings(app);
+            }
+        });
 }
 
 fn start_hotkey_loop(config: Arc<RwLock<AppConfig>>, runtime: Arc<DictationRuntime>) {

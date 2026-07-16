@@ -65,9 +65,17 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 }
 
 pub fn show_settings<R: Runtime>(app: &AppHandle<R>) {
+    #[cfg(target_os = "macos")]
+    if let Err(err) = app.show() {
+        eprintln!("[Voxta] could not show app: {err}");
+    }
+
     if let Some(window) = app.get_webview_window("settings") {
         if let Err(err) = window.show() {
             eprintln!("[Voxta] could not show settings window: {err}");
+        }
+        if let Err(err) = window.unminimize() {
+            eprintln!("[Voxta] could not unminimize settings window: {err}");
         }
         if let Err(err) = window.set_focus() {
             eprintln!("[Voxta] could not focus settings window: {err}");
