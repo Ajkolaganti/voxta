@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  frontend:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  rust:
+    name: Rust checks (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Install CMake on macOS
+        if: runner.os == 'macOS'
+        run: brew install cmake
+      - name: Install CMake on Windows
+        if: runner.os == 'Windows'
+        run: choco install cmake --yes
+      - run: npm ci
+      - name: Rust format
+        working-directory: src-tauri
+        run: cargo fmt --all -- --check
+      - name: Rust tests
+        working-directory: src-tauri
+        run: cargo test --workspace
+      - name: Rust clippy
+        working-directory: src-tauri
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+  build-check:
+    name: Tauri build check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: [frontend, rust]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install CMake on macOS
+        if: runner.os == 'macOS'
+        run: brew install cmake
+      - name: Install CMake on Windows
+        if: runner.os == 'Windows'
+        run: choco install cmake --yes
+      - run: npm ci
+      - run: npm run tauri:build
