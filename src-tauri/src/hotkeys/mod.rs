@@ -1,6 +1,12 @@
 use crate::{config::AppConfig, error::AppError};
+#[cfg(target_os = "macos")]
+use core_foundation::runloop::{kCFRunLoopCommonModes, CFRunLoop};
+#[cfg(target_os = "macos")]
+use core_graphics::event::{
+    CGEvent, CGEventTap, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement, CGEventType,
+    EventField,
+};
 use parking_lot::{Mutex, RwLock};
-use rdev::{grab, Event, EventType, Key};
 use std::{
     collections::HashSet,
     sync::{
@@ -21,7 +27,7 @@ pub enum ShortcutEvent {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Shortcut {
     modifiers: Vec<Modifier>,
-    trigger: Key,
+    trigger: KeyCode,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,6 +36,71 @@ enum Modifier {
     Alt,
     Shift,
     Meta,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum KeyCode {
+    ControlLeft,
+    ControlRight,
+    Alt,
+    AltGr,
+    ShiftLeft,
+    ShiftRight,
+    MetaLeft,
+    MetaRight,
+    Space,
+    Escape,
+    KeyA,
+    KeyB,
+    KeyC,
+    KeyD,
+    KeyE,
+    KeyF,
+    KeyG,
+    KeyH,
+    KeyI,
+    KeyJ,
+    KeyK,
+    KeyL,
+    KeyM,
+    KeyN,
+    KeyO,
+    KeyP,
+    KeyQ,
+    KeyR,
+    KeyS,
+    KeyT,
+    KeyU,
+    KeyV,
+    KeyW,
+    KeyX,
+    KeyY,
+    KeyZ,
+    Num0,
+    Num1,
+    Num2,
+    Num3,
+    Num4,
+    Num5,
+    Num6,
+    Num7,
+    Num8,
+    Num9,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum KeyEvent {
+    Press(KeyCode),
+    Release(KeyCode),
+    Toggle(KeyCode),
+}
+
+impl KeyEvent {
+    fn key(self) -> KeyCode {
+        match self {
+            KeyEvent::Press(key) | KeyEvent::Release(key) | KeyEvent::Toggle(key) => key,
+        }
+    }
 }
 
 impl Shortcut {
@@ -46,8 +117,8 @@ impl Shortcut {
                 "meta" | "cmd" | "command" | "super" | "win" | "windows" => {
                     modifiers.push(Modifier::Meta)
                 }
-                "space" => trigger = Some(Key::Space),
-                "escape" | "esc" => trigger = Some(Key::Escape),
+                "space" => trigger = Some(KeyCode::Space),
+                "escape" | "esc" => trigger = Some(KeyCode::Escape),
                 key if key.len() == 1 => {
                     let ch = key.chars().next().unwrap();
                     trigger = letter_key(ch).or_else(|| digit_key(ch));
@@ -76,7 +147,7 @@ impl Shortcut {
         Ok(Self { modifiers, trigger })
     }
 
-    fn matches(&self, pressed: &HashSet<Key>) -> bool {
+    fn matches(&self, pressed: &HashSet<KeyCode>) -> bool {
         pressed.contains(&self.trigger)
             && self
                 .modifiers
@@ -84,7 +155,7 @@ impl Shortcut {
                 .all(|modifier| modifier_is_pressed(*modifier, pressed))
     }
 
-    fn contains_key(&self, key: Key) -> bool {
+    fn contains_key(&self, key: KeyCode) -> bool {
         self.trigger == key
             || key_modifier(key).is_some_and(|modifier| self.modifiers.contains(&modifier))
     }
@@ -92,7 +163,7 @@ impl Shortcut {
 
 #[derive(Debug)]
 pub struct ShortcutState {
-    pressed: HashSet<Key>,
+    pressed: HashSet<KeyCode>,
     active: bool,
 }
 
@@ -104,14 +175,20 @@ impl ShortcutState {
         }
     }
 
-    pub fn handle(&mut self, event: EventType, shortcut: &Shortcut) -> Option<ShortcutEvent> {
+    fn handle(&mut self, event: KeyEvent, shortcut: &Shortcut) -> Option<ShortcutEvent> {
+        let event = match event {
+            KeyEvent::Toggle(key) if self.pressed.contains(&key) => KeyEvent::Release(key),
+            KeyEvent::Toggle(key) => KeyEvent::Press(key),
+            event => event,
+        };
+
         match event {
-            EventType::KeyPress(Key::Escape) if self.active => {
+            KeyEvent::Press(KeyCode::Escape) if self.active => {
                 self.active = false;
                 self.pressed.clear();
                 Some(ShortcutEvent::Cancel)
             }
-            EventType::KeyPress(key) => {
+            KeyEvent::Press(key) => {
                 self.pressed.insert(key);
                 if !self.active && shortcut.matches(&self.pressed) {
                     self.active = true;
@@ -120,7 +197,7 @@ impl ShortcutState {
                     None
                 }
             }
-            EventType::KeyRelease(key) => {
+            KeyEvent::Release(key) => {
                 let was_active = self.active;
                 self.pressed.remove(&key);
                 if was_active && key == shortcut.trigger {
@@ -130,17 +207,13 @@ impl ShortcutState {
                     None
                 }
             }
-            _ => None,
+            KeyEvent::Toggle(_) => None,
         }
     }
 
-    pub fn should_swallow(&self, event: &EventType, shortcut: &Shortcut) -> bool {
-        match event {
-            EventType::KeyPress(key) | EventType::KeyRelease(key) => {
-                self.active && (*key == Key::Escape || shortcut.contains_key(*key))
-            }
-            _ => false,
-        }
+    fn should_swallow(&self, event: KeyEvent, shortcut: &Shortcut) -> bool {
+        let key = event.key();
+        self.active && (key == KeyCode::Escape || shortcut.contains_key(key))
     }
 }
 
@@ -166,35 +239,36 @@ impl GlobalShortcutManager {
     }
 }
 
+#[cfg(target_os = "macos")]
+fn spawn_grabber(config: Arc<RwLock<AppConfig>>, sender: Sender<ShortcutEvent>) {
+    thread::spawn(move || {
+        let error_sender = sender.clone();
+        if let Err(err) = run_macos_event_tap(config, sender) {
+            let _ = error_sender.send(ShortcutEvent::Error(format!(
+                "global shortcut listener failed: {err}"
+            )));
+        }
+    });
+}
+
+#[cfg(not(target_os = "macos"))]
 fn spawn_grabber(config: Arc<RwLock<AppConfig>>, sender: Sender<ShortcutEvent>) {
     thread::spawn(move || {
         let state = Mutex::new(ShortcutState::new());
         let callback_sender = sender.clone();
-        let callback = move |event: Event| -> Option<Event> {
-            let shortcut_text = config.read().shortcut.clone();
-            let shortcut = match Shortcut::parse(&shortcut_text) {
-                Ok(shortcut) => shortcut,
-                Err(err) => {
-                    let _ = callback_sender.send(ShortcutEvent::Error(err.to_string()));
-                    return Some(event);
-                }
+        let callback = move |event: rdev::Event| -> Option<rdev::Event> {
+            let Some(key_event) = rdev_key_event(event.event_type) else {
+                return Some(event);
             };
 
-            let event_type = event.event_type;
-            let mut state = state.lock();
-            let shortcut_event = state.handle(event_type, &shortcut);
-            if let Some(shortcut_event) = shortcut_event {
-                let _ = callback_sender.send(shortcut_event);
-            }
-
-            if state.should_swallow(&event_type, &shortcut) {
+            if process_shortcut_event(key_event, &config, &state, &callback_sender) {
                 None
             } else {
                 Some(event)
             }
         };
 
-        if let Err(err) = grab(callback) {
+        if let Err(err) = rdev::grab(callback) {
             let _ = sender.send(ShortcutEvent::Error(format!(
                 "global shortcut listener failed: {err:?}"
             )));
@@ -202,84 +276,280 @@ fn spawn_grabber(config: Arc<RwLock<AppConfig>>, sender: Sender<ShortcutEvent>) 
     });
 }
 
-fn modifier_is_pressed(modifier: Modifier, pressed: &HashSet<Key>) -> bool {
+fn process_shortcut_event(
+    event: KeyEvent,
+    config: &Arc<RwLock<AppConfig>>,
+    state: &Mutex<ShortcutState>,
+    sender: &Sender<ShortcutEvent>,
+) -> bool {
+    let shortcut_text = config.read().shortcut.clone();
+    let shortcut = match Shortcut::parse(&shortcut_text) {
+        Ok(shortcut) => shortcut,
+        Err(err) => {
+            let _ = sender.send(ShortcutEvent::Error(err.to_string()));
+            return false;
+        }
+    };
+
+    let mut state = state.lock();
+    if let Some(shortcut_event) = state.handle(event, &shortcut) {
+        let _ = sender.send(shortcut_event);
+    }
+
+    state.should_swallow(event, &shortcut)
+}
+
+#[cfg(target_os = "macos")]
+fn run_macos_event_tap(
+    config: Arc<RwLock<AppConfig>>,
+    sender: Sender<ShortcutEvent>,
+) -> Result<(), &'static str> {
+    let state = Mutex::new(ShortcutState::new());
+    let tap = CGEventTap::new(
+        CGEventTapLocation::HID,
+        CGEventTapPlacement::HeadInsertEventTap,
+        CGEventTapOptions::Default,
+        vec![
+            CGEventType::KeyDown,
+            CGEventType::KeyUp,
+            CGEventType::FlagsChanged,
+        ],
+        move |_proxy, event_type, event| {
+            let Some(key_event) = macos_key_event(event_type, event) else {
+                return Some(event.clone());
+            };
+
+            let forwarded = event.clone();
+            if process_shortcut_event(key_event, &config, &state, &sender) {
+                forwarded.set_type(CGEventType::Null);
+            }
+            Some(forwarded)
+        },
+    )
+    .map_err(|_| "event tap unavailable; grant Accessibility permission to Voxta and restart")?;
+
+    let current = CFRunLoop::get_current();
+    let loop_source = tap
+        .mach_port
+        .create_runloop_source(0)
+        .map_err(|_| "failed to create macOS event tap run loop source")?;
+    unsafe {
+        current.add_source(&loop_source, kCFRunLoopCommonModes);
+    }
+    tap.enable();
+    CFRunLoop::run_current();
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn macos_key_event(event_type: CGEventType, event: &CGEvent) -> Option<KeyEvent> {
+    let keycode = event.get_integer_value_field(EventField::KEYBOARD_EVENT_KEYCODE) as u16;
+    match event_type {
+        CGEventType::KeyDown => macos_keycode_to_key(keycode).map(KeyEvent::Press),
+        CGEventType::KeyUp => macos_keycode_to_key(keycode).map(KeyEvent::Release),
+        CGEventType::FlagsChanged => macos_keycode_to_key(keycode)
+            .filter(|key| key_modifier(*key).is_some())
+            .map(KeyEvent::Toggle),
+        _ => None,
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn macos_keycode_to_key(keycode: u16) -> Option<KeyCode> {
+    match keycode {
+        0 => Some(KeyCode::KeyA),
+        1 => Some(KeyCode::KeyS),
+        2 => Some(KeyCode::KeyD),
+        3 => Some(KeyCode::KeyF),
+        4 => Some(KeyCode::KeyH),
+        5 => Some(KeyCode::KeyG),
+        6 => Some(KeyCode::KeyZ),
+        7 => Some(KeyCode::KeyX),
+        8 => Some(KeyCode::KeyC),
+        9 => Some(KeyCode::KeyV),
+        11 => Some(KeyCode::KeyB),
+        12 => Some(KeyCode::KeyQ),
+        13 => Some(KeyCode::KeyW),
+        14 => Some(KeyCode::KeyE),
+        15 => Some(KeyCode::KeyR),
+        16 => Some(KeyCode::KeyY),
+        17 => Some(KeyCode::KeyT),
+        18 => Some(KeyCode::Num1),
+        19 => Some(KeyCode::Num2),
+        20 => Some(KeyCode::Num3),
+        21 => Some(KeyCode::Num4),
+        22 => Some(KeyCode::Num6),
+        23 => Some(KeyCode::Num5),
+        25 => Some(KeyCode::Num9),
+        26 => Some(KeyCode::Num7),
+        28 => Some(KeyCode::Num8),
+        29 => Some(KeyCode::Num0),
+        31 => Some(KeyCode::KeyO),
+        32 => Some(KeyCode::KeyU),
+        34 => Some(KeyCode::KeyI),
+        35 => Some(KeyCode::KeyP),
+        37 => Some(KeyCode::KeyL),
+        38 => Some(KeyCode::KeyJ),
+        40 => Some(KeyCode::KeyK),
+        45 => Some(KeyCode::KeyN),
+        46 => Some(KeyCode::KeyM),
+        49 => Some(KeyCode::Space),
+        53 => Some(KeyCode::Escape),
+        54 => Some(KeyCode::MetaRight),
+        55 => Some(KeyCode::MetaLeft),
+        56 => Some(KeyCode::ShiftLeft),
+        58 => Some(KeyCode::Alt),
+        59 => Some(KeyCode::ControlLeft),
+        60 => Some(KeyCode::ShiftRight),
+        61 => Some(KeyCode::AltGr),
+        62 => Some(KeyCode::ControlRight),
+        _ => None,
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn rdev_key_event(event: rdev::EventType) -> Option<KeyEvent> {
+    match event {
+        rdev::EventType::KeyPress(key) => rdev_key_to_key(key).map(KeyEvent::Press),
+        rdev::EventType::KeyRelease(key) => rdev_key_to_key(key).map(KeyEvent::Release),
+        _ => None,
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn rdev_key_to_key(key: rdev::Key) -> Option<KeyCode> {
+    match key {
+        rdev::Key::ControlLeft => Some(KeyCode::ControlLeft),
+        rdev::Key::ControlRight => Some(KeyCode::ControlRight),
+        rdev::Key::Alt => Some(KeyCode::Alt),
+        rdev::Key::AltGr => Some(KeyCode::AltGr),
+        rdev::Key::ShiftLeft => Some(KeyCode::ShiftLeft),
+        rdev::Key::ShiftRight => Some(KeyCode::ShiftRight),
+        rdev::Key::MetaLeft => Some(KeyCode::MetaLeft),
+        rdev::Key::MetaRight => Some(KeyCode::MetaRight),
+        rdev::Key::Space => Some(KeyCode::Space),
+        rdev::Key::Escape => Some(KeyCode::Escape),
+        rdev::Key::KeyA => Some(KeyCode::KeyA),
+        rdev::Key::KeyB => Some(KeyCode::KeyB),
+        rdev::Key::KeyC => Some(KeyCode::KeyC),
+        rdev::Key::KeyD => Some(KeyCode::KeyD),
+        rdev::Key::KeyE => Some(KeyCode::KeyE),
+        rdev::Key::KeyF => Some(KeyCode::KeyF),
+        rdev::Key::KeyG => Some(KeyCode::KeyG),
+        rdev::Key::KeyH => Some(KeyCode::KeyH),
+        rdev::Key::KeyI => Some(KeyCode::KeyI),
+        rdev::Key::KeyJ => Some(KeyCode::KeyJ),
+        rdev::Key::KeyK => Some(KeyCode::KeyK),
+        rdev::Key::KeyL => Some(KeyCode::KeyL),
+        rdev::Key::KeyM => Some(KeyCode::KeyM),
+        rdev::Key::KeyN => Some(KeyCode::KeyN),
+        rdev::Key::KeyO => Some(KeyCode::KeyO),
+        rdev::Key::KeyP => Some(KeyCode::KeyP),
+        rdev::Key::KeyQ => Some(KeyCode::KeyQ),
+        rdev::Key::KeyR => Some(KeyCode::KeyR),
+        rdev::Key::KeyS => Some(KeyCode::KeyS),
+        rdev::Key::KeyT => Some(KeyCode::KeyT),
+        rdev::Key::KeyU => Some(KeyCode::KeyU),
+        rdev::Key::KeyV => Some(KeyCode::KeyV),
+        rdev::Key::KeyW => Some(KeyCode::KeyW),
+        rdev::Key::KeyX => Some(KeyCode::KeyX),
+        rdev::Key::KeyY => Some(KeyCode::KeyY),
+        rdev::Key::KeyZ => Some(KeyCode::KeyZ),
+        rdev::Key::Num0 => Some(KeyCode::Num0),
+        rdev::Key::Num1 => Some(KeyCode::Num1),
+        rdev::Key::Num2 => Some(KeyCode::Num2),
+        rdev::Key::Num3 => Some(KeyCode::Num3),
+        rdev::Key::Num4 => Some(KeyCode::Num4),
+        rdev::Key::Num5 => Some(KeyCode::Num5),
+        rdev::Key::Num6 => Some(KeyCode::Num6),
+        rdev::Key::Num7 => Some(KeyCode::Num7),
+        rdev::Key::Num8 => Some(KeyCode::Num8),
+        rdev::Key::Num9 => Some(KeyCode::Num9),
+        _ => None,
+    }
+}
+
+fn modifier_is_pressed(modifier: Modifier, pressed: &HashSet<KeyCode>) -> bool {
     match modifier {
         Modifier::Ctrl => {
-            pressed.contains(&Key::ControlLeft) || pressed.contains(&Key::ControlRight)
+            pressed.contains(&KeyCode::ControlLeft) || pressed.contains(&KeyCode::ControlRight)
         }
-        Modifier::Alt => pressed.contains(&Key::Alt) || pressed.contains(&Key::AltGr),
-        Modifier::Shift => pressed.contains(&Key::ShiftLeft) || pressed.contains(&Key::ShiftRight),
-        Modifier::Meta => pressed.contains(&Key::MetaLeft) || pressed.contains(&Key::MetaRight),
+        Modifier::Alt => pressed.contains(&KeyCode::Alt) || pressed.contains(&KeyCode::AltGr),
+        Modifier::Shift => {
+            pressed.contains(&KeyCode::ShiftLeft) || pressed.contains(&KeyCode::ShiftRight)
+        }
+        Modifier::Meta => {
+            pressed.contains(&KeyCode::MetaLeft) || pressed.contains(&KeyCode::MetaRight)
+        }
     }
 }
 
-fn key_modifier(key: Key) -> Option<Modifier> {
+fn key_modifier(key: KeyCode) -> Option<Modifier> {
     match key {
-        Key::ControlLeft | Key::ControlRight => Some(Modifier::Ctrl),
-        Key::Alt | Key::AltGr => Some(Modifier::Alt),
-        Key::ShiftLeft | Key::ShiftRight => Some(Modifier::Shift),
-        Key::MetaLeft | Key::MetaRight => Some(Modifier::Meta),
+        KeyCode::ControlLeft | KeyCode::ControlRight => Some(Modifier::Ctrl),
+        KeyCode::Alt | KeyCode::AltGr => Some(Modifier::Alt),
+        KeyCode::ShiftLeft | KeyCode::ShiftRight => Some(Modifier::Shift),
+        KeyCode::MetaLeft | KeyCode::MetaRight => Some(Modifier::Meta),
         _ => None,
     }
 }
 
-fn letter_key(ch: char) -> Option<Key> {
+fn letter_key(ch: char) -> Option<KeyCode> {
     match ch.to_ascii_lowercase() {
-        'a' => Some(Key::KeyA),
-        'b' => Some(Key::KeyB),
-        'c' => Some(Key::KeyC),
-        'd' => Some(Key::KeyD),
-        'e' => Some(Key::KeyE),
-        'f' => Some(Key::KeyF),
-        'g' => Some(Key::KeyG),
-        'h' => Some(Key::KeyH),
-        'i' => Some(Key::KeyI),
-        'j' => Some(Key::KeyJ),
-        'k' => Some(Key::KeyK),
-        'l' => Some(Key::KeyL),
-        'm' => Some(Key::KeyM),
-        'n' => Some(Key::KeyN),
-        'o' => Some(Key::KeyO),
-        'p' => Some(Key::KeyP),
-        'q' => Some(Key::KeyQ),
-        'r' => Some(Key::KeyR),
-        's' => Some(Key::KeyS),
-        't' => Some(Key::KeyT),
-        'u' => Some(Key::KeyU),
-        'v' => Some(Key::KeyV),
-        'w' => Some(Key::KeyW),
-        'x' => Some(Key::KeyX),
-        'y' => Some(Key::KeyY),
-        'z' => Some(Key::KeyZ),
+        'a' => Some(KeyCode::KeyA),
+        'b' => Some(KeyCode::KeyB),
+        'c' => Some(KeyCode::KeyC),
+        'd' => Some(KeyCode::KeyD),
+        'e' => Some(KeyCode::KeyE),
+        'f' => Some(KeyCode::KeyF),
+        'g' => Some(KeyCode::KeyG),
+        'h' => Some(KeyCode::KeyH),
+        'i' => Some(KeyCode::KeyI),
+        'j' => Some(KeyCode::KeyJ),
+        'k' => Some(KeyCode::KeyK),
+        'l' => Some(KeyCode::KeyL),
+        'm' => Some(KeyCode::KeyM),
+        'n' => Some(KeyCode::KeyN),
+        'o' => Some(KeyCode::KeyO),
+        'p' => Some(KeyCode::KeyP),
+        'q' => Some(KeyCode::KeyQ),
+        'r' => Some(KeyCode::KeyR),
+        's' => Some(KeyCode::KeyS),
+        't' => Some(KeyCode::KeyT),
+        'u' => Some(KeyCode::KeyU),
+        'v' => Some(KeyCode::KeyV),
+        'w' => Some(KeyCode::KeyW),
+        'x' => Some(KeyCode::KeyX),
+        'y' => Some(KeyCode::KeyY),
+        'z' => Some(KeyCode::KeyZ),
         _ => None,
     }
 }
 
-fn digit_key(ch: char) -> Option<Key> {
+fn digit_key(ch: char) -> Option<KeyCode> {
     match ch {
-        '0' => Some(Key::Num0),
-        '1' => Some(Key::Num1),
-        '2' => Some(Key::Num2),
-        '3' => Some(Key::Num3),
-        '4' => Some(Key::Num4),
-        '5' => Some(Key::Num5),
-        '6' => Some(Key::Num6),
-        '7' => Some(Key::Num7),
-        '8' => Some(Key::Num8),
-        '9' => Some(Key::Num9),
+        '0' => Some(KeyCode::Num0),
+        '1' => Some(KeyCode::Num1),
+        '2' => Some(KeyCode::Num2),
+        '3' => Some(KeyCode::Num3),
+        '4' => Some(KeyCode::Num4),
+        '5' => Some(KeyCode::Num5),
+        '6' => Some(KeyCode::Num6),
+        '7' => Some(KeyCode::Num7),
+        '8' => Some(KeyCode::Num8),
+        '9' => Some(KeyCode::Num9),
         _ => None,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Shortcut, ShortcutEvent, ShortcutState};
-    use rdev::{EventType, Key};
+    use super::{KeyCode, KeyEvent, Shortcut, ShortcutEvent, ShortcutState};
 
     #[test]
     fn parses_shortcut() {
         let shortcut = Shortcut::parse("Ctrl+Alt+Space").unwrap();
-        assert_eq!(shortcut.trigger, Key::Space);
+        assert_eq!(shortcut.trigger, KeyCode::Space);
     }
 
     #[test]
@@ -287,20 +557,20 @@ mod tests {
         let shortcut = Shortcut::parse("Ctrl+Alt+Space").unwrap();
         let mut state = ShortcutState::new();
         assert_eq!(
-            state.handle(EventType::KeyPress(Key::ControlLeft), &shortcut),
+            state.handle(KeyEvent::Press(KeyCode::ControlLeft), &shortcut),
             None
         );
-        assert_eq!(state.handle(EventType::KeyPress(Key::Alt), &shortcut), None);
+        assert_eq!(state.handle(KeyEvent::Press(KeyCode::Alt), &shortcut), None);
         assert_eq!(
-            state.handle(EventType::KeyPress(Key::Space), &shortcut),
+            state.handle(KeyEvent::Press(KeyCode::Space), &shortcut),
             Some(ShortcutEvent::Start)
         );
         assert_eq!(
-            state.handle(EventType::KeyPress(Key::Space), &shortcut),
+            state.handle(KeyEvent::Press(KeyCode::Space), &shortcut),
             None
         );
         assert_eq!(
-            state.handle(EventType::KeyRelease(Key::Space), &shortcut),
+            state.handle(KeyEvent::Release(KeyCode::Space), &shortcut),
             Some(ShortcutEvent::Stop)
         );
     }
@@ -309,12 +579,29 @@ mod tests {
     fn escape_cancels_active_recording() {
         let shortcut = Shortcut::parse("Ctrl+Alt+Space").unwrap();
         let mut state = ShortcutState::new();
-        state.handle(EventType::KeyPress(Key::ControlLeft), &shortcut);
-        state.handle(EventType::KeyPress(Key::Alt), &shortcut);
-        state.handle(EventType::KeyPress(Key::Space), &shortcut);
+        state.handle(KeyEvent::Press(KeyCode::ControlLeft), &shortcut);
+        state.handle(KeyEvent::Press(KeyCode::Alt), &shortcut);
+        state.handle(KeyEvent::Press(KeyCode::Space), &shortcut);
         assert_eq!(
-            state.handle(EventType::KeyPress(Key::Escape), &shortcut),
+            state.handle(KeyEvent::Press(KeyCode::Escape), &shortcut),
             Some(ShortcutEvent::Cancel)
         );
+    }
+
+    #[test]
+    fn macos_modifier_toggle_events_behave_like_press_and_release() {
+        let shortcut = Shortcut::parse("Ctrl+Alt+Space").unwrap();
+        let mut state = ShortcutState::new();
+        state.handle(KeyEvent::Toggle(KeyCode::ControlLeft), &shortcut);
+        state.handle(KeyEvent::Toggle(KeyCode::Alt), &shortcut);
+        assert_eq!(
+            state.handle(KeyEvent::Press(KeyCode::Space), &shortcut),
+            Some(ShortcutEvent::Start)
+        );
+        assert_eq!(
+            state.handle(KeyEvent::Toggle(KeyCode::ControlLeft), &shortcut),
+            None
+        );
+        assert!(!state.pressed.contains(&KeyCode::ControlLeft));
     }
 }
