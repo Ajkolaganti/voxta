@@ -21,7 +21,8 @@ export function useVoxta() {
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [permissions, setPermissions] = useState<PermissionStatus>({
     microphone: "unknown",
-    accessibility: "unknown"
+    accessibility: "unknown",
+    inputMonitoring: "unknown"
   });
   const [downloadProgress, setDownloadProgress] = useState<Record<string, ModelDownloadProgress>>({});
   const [loading, setLoading] = useState(true);

@@ -37,6 +37,7 @@ export interface ModelInfo {
 export interface PermissionStatus {
   microphone: "granted" | "denied" | "notDetermined" | "unknown";
   accessibility: "granted" | "denied" | "notRequired" | "unknown";
+  inputMonitoring: "granted" | "denied" | "notDetermined" | "notRequired" | "unknown";
 }
 
 export interface RuntimeStatus {

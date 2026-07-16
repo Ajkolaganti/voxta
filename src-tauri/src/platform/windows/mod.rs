@@ -54,6 +54,7 @@ pub fn permission_status() -> PermissionStatus {
     PermissionStatus {
         microphone: PermissionGrant::Unknown,
         accessibility: PermissionGrant::NotRequired,
+        input_monitoring: PermissionGrant::NotRequired,
     }
 }
 

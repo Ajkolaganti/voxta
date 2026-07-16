@@ -2,7 +2,7 @@ import type { PermissionStatus } from "../types/voxta";
 
 interface Props {
   permissions: PermissionStatus;
-  onOpen: (permission: "microphone" | "accessibility") => void;
+  onOpen: (permission: "microphone" | "accessibility" | "inputMonitoring") => void;
 }
 
 function readableStatus(value: string) {
@@ -39,6 +39,15 @@ export function PermissionRows({ permissions, onOpen }: Props) {
           <span>{readableStatus(permissions.accessibility)}</span>
         </div>
         <button type="button" className="secondary" onClick={() => onOpen("accessibility")}>
+          Open
+        </button>
+      </div>
+      <div className="permission-row">
+        <div>
+          <strong>Input Monitoring</strong>
+          <span>{readableStatus(permissions.inputMonitoring)}</span>
+        </div>
+        <button type="button" className="secondary" onClick={() => onOpen("inputMonitoring")}>
           Open
         </button>
       </div>

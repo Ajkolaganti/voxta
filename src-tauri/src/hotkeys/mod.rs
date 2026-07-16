@@ -304,6 +304,12 @@ fn run_macos_event_tap(
     config: Arc<RwLock<AppConfig>>,
     sender: Sender<ShortcutEvent>,
 ) -> Result<(), &'static str> {
+    if crate::platform::macos::input_monitoring_status()
+        != crate::permissions::PermissionGrant::Granted
+    {
+        let _ = crate::platform::macos::request_input_monitoring();
+    }
+
     let state = Mutex::new(ShortcutState::new());
     let tap = CGEventTap::new(
         CGEventTapLocation::HID,
@@ -326,7 +332,9 @@ fn run_macos_event_tap(
             Some(forwarded)
         },
     )
-    .map_err(|_| "event tap unavailable; grant Accessibility permission to Voxta and restart")?;
+    .map_err(|_| {
+        "event tap unavailable; grant Accessibility and Input Monitoring permission to Voxta, then restart"
+    })?;
 
     let current = CFRunLoop::get_current();
     let loop_source = tap

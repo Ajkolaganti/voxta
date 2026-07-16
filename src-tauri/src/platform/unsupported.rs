@@ -16,6 +16,7 @@ pub fn permission_status() -> PermissionStatus {
     PermissionStatus {
         microphone: PermissionGrant::Unknown,
         accessibility: PermissionGrant::Unknown,
+        input_monitoring: PermissionGrant::Unknown,
     }
 }
 

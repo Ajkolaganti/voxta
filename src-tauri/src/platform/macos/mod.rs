@@ -10,10 +10,20 @@ extern "C" {
     fn AXIsProcessTrusted() -> bool;
 }
 
+#[link(name = "IOKit", kind = "framework")]
+extern "C" {
+    fn IOHIDCheckAccess(request_type: u32) -> u32;
+    fn IOHIDRequestAccess(request_type: u32) -> bool;
+}
+
 #[link(name = "AudioToolbox", kind = "framework")]
 extern "C" {
     fn AudioServicesPlaySystemSound(in_system_sound_id: u32);
 }
+
+const IOHID_REQUEST_TYPE_LISTEN_EVENT: u32 = 1;
+const IOHID_ACCESS_GRANTED: u32 = 0;
+const IOHID_ACCESS_DENIED: u32 = 1;
 
 pub fn capture_focus() -> AppResult<FocusSnapshot> {
     if unsafe { !AXIsProcessTrusted() } {
@@ -69,7 +79,20 @@ pub fn permission_status() -> PermissionStatus {
     PermissionStatus {
         microphone: PermissionGrant::Unknown,
         accessibility,
+        input_monitoring: input_monitoring_status(),
     }
+}
+
+pub fn input_monitoring_status() -> PermissionGrant {
+    match unsafe { IOHIDCheckAccess(IOHID_REQUEST_TYPE_LISTEN_EVENT) } {
+        IOHID_ACCESS_GRANTED => PermissionGrant::Granted,
+        IOHID_ACCESS_DENIED => PermissionGrant::Denied,
+        _ => PermissionGrant::NotDetermined,
+    }
+}
+
+pub fn request_input_monitoring() -> bool {
+    unsafe { IOHIDRequestAccess(IOHID_REQUEST_TYPE_LISTEN_EVENT) }
 }
 
 pub fn open_permission_settings(permission: &str) -> AppResult<()> {
@@ -79,6 +102,10 @@ pub fn open_permission_settings(permission: &str) -> AppResult<()> {
         }
         "accessibility" => {
             "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+        }
+        "inputMonitoring" | "input_monitoring" => {
+            let _ = request_input_monitoring();
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
         }
         _ => {
             return Err(AppError::Permission(format!(

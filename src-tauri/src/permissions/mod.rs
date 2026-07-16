@@ -15,4 +15,5 @@ pub enum PermissionGrant {
 pub struct PermissionStatus {
     pub microphone: PermissionGrant,
     pub accessibility: PermissionGrant,
+    pub input_monitoring: PermissionGrant,
 }

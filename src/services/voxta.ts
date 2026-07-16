@@ -121,9 +121,10 @@ export const voxtaApi = {
   getPermissions: () =>
     call<PermissionStatus>("get_permission_status", undefined, {
       microphone: "unknown",
-      accessibility: "unknown"
+      accessibility: "unknown",
+      inputMonitoring: "unknown"
     }),
-  openPermissionSettings: (permission: "microphone" | "accessibility") =>
+  openPermissionSettings: (permission: "microphone" | "accessibility" | "inputMonitoring") =>
     call<void>("open_permission_settings", { permission }, undefined),
   testMicrophone: (microphoneId: string) =>
     call<string>("test_microphone", { microphoneId }, "Microphone input detected."),
