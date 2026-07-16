@@ -3,8 +3,8 @@ use crate::{config::AppConfig, error::AppError};
 use core_foundation::runloop::{kCFRunLoopCommonModes, CFRunLoop};
 #[cfg(target_os = "macos")]
 use core_graphics::event::{
-    CGEvent, CGEventTap, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement, CGEventType,
-    EventField,
+    CGEvent, CGEventFlags, CGEventTap, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement,
+    CGEventType, EventField,
 };
 use parking_lot::{Mutex, RwLock};
 use std::{
@@ -92,13 +92,12 @@ enum KeyCode {
 enum KeyEvent {
     Press(KeyCode),
     Release(KeyCode),
-    Toggle(KeyCode),
 }
 
 impl KeyEvent {
     fn key(self) -> KeyCode {
         match self {
-            KeyEvent::Press(key) | KeyEvent::Release(key) | KeyEvent::Toggle(key) => key,
+            KeyEvent::Press(key) | KeyEvent::Release(key) => key,
         }
     }
 }
@@ -176,12 +175,6 @@ impl ShortcutState {
     }
 
     fn handle(&mut self, event: KeyEvent, shortcut: &Shortcut) -> Option<ShortcutEvent> {
-        let event = match event {
-            KeyEvent::Toggle(key) if self.pressed.contains(&key) => KeyEvent::Release(key),
-            KeyEvent::Toggle(key) => KeyEvent::Press(key),
-            event => event,
-        };
-
         match event {
             KeyEvent::Press(KeyCode::Escape) if self.active => {
                 self.active = false;
@@ -207,7 +200,6 @@ impl ShortcutState {
                     None
                 }
             }
-            KeyEvent::Toggle(_) => None,
         }
     }
 
@@ -276,6 +268,7 @@ fn spawn_grabber(config: Arc<RwLock<AppConfig>>, sender: Sender<ShortcutEvent>) 
     });
 }
 
+#[cfg(not(target_os = "macos"))]
 fn process_shortcut_event(
     event: KeyEvent,
     config: &Arc<RwLock<AppConfig>>,
@@ -321,12 +314,14 @@ fn run_macos_event_tap(
             CGEventType::FlagsChanged,
         ],
         move |_proxy, event_type, event| {
-            let Some(key_event) = macos_key_event(event_type, event) else {
+            let key_event = macos_key_event(event_type, event);
+            if key_event.is_none() && !matches!(event_type, CGEventType::FlagsChanged) {
                 return Some(event.clone());
-            };
+            }
 
             let forwarded = event.clone();
-            if process_shortcut_event(key_event, &config, &state, &sender) {
+            if process_macos_shortcut_event(key_event, event.get_flags(), &config, &state, &sender)
+            {
                 forwarded.set_type(CGEventType::Null);
             }
             Some(forwarded)
@@ -355,10 +350,82 @@ fn macos_key_event(event_type: CGEventType, event: &CGEvent) -> Option<KeyEvent>
     match event_type {
         CGEventType::KeyDown => macos_keycode_to_key(keycode).map(KeyEvent::Press),
         CGEventType::KeyUp => macos_keycode_to_key(keycode).map(KeyEvent::Release),
-        CGEventType::FlagsChanged => macos_keycode_to_key(keycode)
-            .filter(|key| key_modifier(*key).is_some())
-            .map(KeyEvent::Toggle),
         _ => None,
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn process_macos_shortcut_event(
+    event: Option<KeyEvent>,
+    flags: CGEventFlags,
+    config: &Arc<RwLock<AppConfig>>,
+    state: &Mutex<ShortcutState>,
+    sender: &Sender<ShortcutEvent>,
+) -> bool {
+    let shortcut_text = config.read().shortcut.clone();
+    let shortcut = match Shortcut::parse(&shortcut_text) {
+        Ok(shortcut) => shortcut,
+        Err(err) => {
+            let _ = sender.send(ShortcutEvent::Error(err.to_string()));
+            return false;
+        }
+    };
+
+    let mut state = state.lock();
+    sync_macos_modifiers(&mut state.pressed, flags);
+
+    let Some(event) = event else {
+        return false;
+    };
+
+    if let Some(shortcut_event) = state.handle(event, &shortcut) {
+        let _ = sender.send(shortcut_event);
+    }
+
+    state.should_swallow(event, &shortcut)
+}
+
+#[cfg(target_os = "macos")]
+fn sync_macos_modifiers(pressed: &mut HashSet<KeyCode>, flags: CGEventFlags) {
+    set_modifier_group(
+        pressed,
+        flags.contains(CGEventFlags::CGEventFlagControl),
+        &[KeyCode::ControlLeft, KeyCode::ControlRight],
+        KeyCode::ControlLeft,
+    );
+    set_modifier_group(
+        pressed,
+        flags.contains(CGEventFlags::CGEventFlagAlternate),
+        &[KeyCode::Alt, KeyCode::AltGr],
+        KeyCode::Alt,
+    );
+    set_modifier_group(
+        pressed,
+        flags.contains(CGEventFlags::CGEventFlagShift),
+        &[KeyCode::ShiftLeft, KeyCode::ShiftRight],
+        KeyCode::ShiftLeft,
+    );
+    set_modifier_group(
+        pressed,
+        flags.contains(CGEventFlags::CGEventFlagCommand),
+        &[KeyCode::MetaLeft, KeyCode::MetaRight],
+        KeyCode::MetaLeft,
+    );
+}
+
+#[cfg(target_os = "macos")]
+fn set_modifier_group(
+    pressed: &mut HashSet<KeyCode>,
+    active: bool,
+    keys: &[KeyCode],
+    canonical: KeyCode,
+) {
+    if active {
+        pressed.insert(canonical);
+    } else {
+        for key in keys {
+            pressed.remove(key);
+        }
     }
 }
 
@@ -597,19 +664,18 @@ mod tests {
     }
 
     #[test]
-    fn macos_modifier_toggle_events_behave_like_press_and_release() {
+    fn stale_modifiers_do_not_trigger_without_the_shortcut_trigger() {
         let shortcut = Shortcut::parse("Ctrl+Alt+Space").unwrap();
         let mut state = ShortcutState::new();
-        state.handle(KeyEvent::Toggle(KeyCode::ControlLeft), &shortcut);
-        state.handle(KeyEvent::Toggle(KeyCode::Alt), &shortcut);
+        state.pressed.insert(KeyCode::ControlLeft);
+        state.pressed.insert(KeyCode::Alt);
         assert_eq!(
-            state.handle(KeyEvent::Press(KeyCode::Space), &shortcut),
-            Some(ShortcutEvent::Start)
-        );
-        assert_eq!(
-            state.handle(KeyEvent::Toggle(KeyCode::ControlLeft), &shortcut),
+            state.handle(KeyEvent::Press(KeyCode::KeyA), &shortcut),
             None
         );
-        assert!(!state.pressed.contains(&KeyCode::ControlLeft));
+        assert_eq!(
+            state.handle(KeyEvent::Release(KeyCode::KeyA), &shortcut),
+            None
+        );
     }
 }

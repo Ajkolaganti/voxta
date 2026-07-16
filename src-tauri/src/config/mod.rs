@@ -54,7 +54,7 @@ pub fn default_shortcut() -> String {
 
 impl AppConfig {
     pub fn validate(mut self) -> Self {
-        if self.shortcut.trim().is_empty() {
+        if !is_valid_shortcut(&self.shortcut) {
             self.shortcut = default_shortcut();
         }
         if self.model.trim().is_empty() {
@@ -99,7 +99,13 @@ impl ConfigStore {
 
         let text = fs::read_to_string(&self.path)?;
         match serde_json::from_str::<AppConfig>(&text) {
-            Ok(config) => Ok(config.validate()),
+            Ok(config) => {
+                let validated = config.clone().validate();
+                if validated != config {
+                    self.save(&validated)?;
+                }
+                Ok(validated)
+            }
             Err(err) => {
                 let backup = self.path.with_extension("json.corrupt");
                 let _ = fs::copy(&self.path, backup);
@@ -120,6 +126,27 @@ impl ConfigStore {
         fs::write(&self.path, text)?;
         Ok(())
     }
+}
+
+fn is_valid_shortcut(input: &str) -> bool {
+    let mut has_modifier = false;
+    let mut has_trigger = false;
+
+    for raw in input.split('+') {
+        let part = raw.trim().to_ascii_lowercase();
+        match part.as_str() {
+            "ctrl" | "control" | "alt" | "option" | "shift" | "meta" | "cmd" | "command"
+            | "super" | "win" | "windows" => has_modifier = true,
+            "space" | "escape" | "esc" => has_trigger = true,
+            key if key.len() == 1 => {
+                let ch = key.chars().next().unwrap();
+                has_trigger = ch.is_ascii_alphanumeric();
+            }
+            _ => return false,
+        }
+    }
+
+    has_modifier && has_trigger
 }
 
 fn migrate_config_if_needed(base: PathBuf) -> AppResult<PathBuf> {
@@ -183,5 +210,27 @@ mod tests {
         let config =
             serde_json::from_str::<AppConfig>(&fs::read_to_string(migrated).unwrap()).unwrap();
         assert_eq!(config.shortcut, "Ctrl+Alt+V");
+    }
+
+    #[test]
+    fn invalid_shortcut_is_reset_to_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        let store = ConfigStore::from_path(path.clone());
+        store
+            .save(&AppConfig {
+                shortcut: "Ctrl+Alt".to_string(),
+                ..AppConfig::default()
+            })
+            .unwrap();
+
+        let recovered = store.load().unwrap();
+        assert_eq!(recovered.shortcut, super::default_shortcut());
+        assert_eq!(
+            serde_json::from_str::<AppConfig>(&fs::read_to_string(path).unwrap())
+                .unwrap()
+                .shortcut,
+            super::default_shortcut()
+        );
     }
 }

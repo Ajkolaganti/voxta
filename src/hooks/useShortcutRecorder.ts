@@ -16,6 +16,12 @@ function eventToShortcut(event: KeyboardEvent): string {
   return parts.join("+");
 }
 
+function isCompleteShortcut(shortcut: string): boolean {
+  const modifiers = new Set(["Ctrl", "Meta", "Alt", "Shift"]);
+  const parts = shortcut.split("+").filter(Boolean);
+  return parts.some((part) => modifiers.has(part)) && parts.some((part) => !modifiers.has(part));
+}
+
 export function useShortcutRecorder(initialValue: string, onCommit: (shortcut: string) => void) {
   const [recording, setRecording] = useState(false);
   const [draft, setDraft] = useState(initialValue);
@@ -31,7 +37,7 @@ export function useShortcutRecorder(initialValue: string, onCommit: (shortcut: s
       event.preventDefault();
       event.stopPropagation();
       const shortcut = eventToShortcut(event);
-      if (shortcut && shortcut.includes("+")) {
+      if (shortcut) {
         setDraft(shortcut);
       }
       if (event.key === "Escape") {
@@ -42,7 +48,7 @@ export function useShortcutRecorder(initialValue: string, onCommit: (shortcut: s
     const onKeyUp = (event: KeyboardEvent) => {
       event.preventDefault();
       event.stopPropagation();
-      if (draft.includes("+")) {
+      if (isCompleteShortcut(draft)) {
         onCommit(draft);
         setRecording(false);
       }
