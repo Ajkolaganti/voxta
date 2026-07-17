@@ -68,18 +68,20 @@ pub fn restore_focus(snapshot: &FocusSnapshot) -> AppResult<()> {
 }
 
 pub fn permission_status() -> PermissionStatus {
-    let accessibility = unsafe {
+    PermissionStatus {
+        microphone: PermissionGrant::Unknown,
+        accessibility: accessibility_status(),
+        input_monitoring: input_monitoring_status(),
+    }
+}
+
+pub fn accessibility_status() -> PermissionGrant {
+    unsafe {
         if AXIsProcessTrusted() {
             PermissionGrant::Granted
         } else {
             PermissionGrant::Denied
         }
-    };
-
-    PermissionStatus {
-        microphone: PermissionGrant::Unknown,
-        accessibility,
-        input_monitoring: input_monitoring_status(),
     }
 }
 

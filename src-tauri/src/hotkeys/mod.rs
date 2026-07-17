@@ -1,3 +1,5 @@
+#[cfg(target_os = "macos")]
+use crate::permissions::PermissionGrant;
 use crate::{
     config::{AppConfig, ShortcutBehavior},
     error::AppError,
@@ -349,16 +351,68 @@ fn process_shortcut_event(
 fn run_macos_event_tap(
     config: Arc<RwLock<AppConfig>>,
     sender: Sender<ShortcutEvent>,
-) -> Result<(), &'static str> {
-    if crate::platform::macos::input_monitoring_status()
-        != crate::permissions::PermissionGrant::Granted
-    {
+) -> Result<(), String> {
+    validate_macos_event_tap_permissions()?;
+
+    let state = Arc::new(Mutex::new(ShortcutState::new()));
+    let tap = match create_macos_event_tap(
+        CGEventTapLocation::HID,
+        Arc::clone(&config),
+        Arc::clone(&state),
+        sender.clone(),
+    ) {
+        Ok(tap) => tap,
+        Err(()) => {
+            eprintln!("[Voxta] HID event tap unavailable; trying session event tap");
+            create_macos_event_tap(CGEventTapLocation::Session, config, state, sender)
+                .map_err(|_| macos_event_tap_unavailable_message())?
+        }
+    };
+
+    let current = CFRunLoop::get_current();
+    let loop_source = tap
+        .mach_port
+        .create_runloop_source(0)
+        .map_err(|_| "failed to create macOS event tap run loop source".to_string())?;
+    unsafe {
+        current.add_source(&loop_source, kCFRunLoopCommonModes);
+    }
+    tap.enable();
+    CFRunLoop::run_current();
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn validate_macos_event_tap_permissions() -> Result<(), String> {
+    let accessibility = crate::platform::macos::accessibility_status();
+    let mut input_monitoring = crate::platform::macos::input_monitoring_status();
+
+    if input_monitoring != PermissionGrant::Granted {
         let _ = crate::platform::macos::request_input_monitoring();
+        input_monitoring = crate::platform::macos::input_monitoring_status();
     }
 
-    let state = Mutex::new(ShortcutState::new());
-    let tap = CGEventTap::new(
-        CGEventTapLocation::HID,
+    if accessibility == PermissionGrant::Granted && input_monitoring == PermissionGrant::Granted {
+        return Ok(());
+    }
+
+    Err(format!(
+        "macOS reports Accessibility: {}; Input Monitoring: {}. Voxta needs both permissions for the global shortcut. If they are already enabled in System Settings, remove and re-add the same Voxta.app or reset stale permissions for com.voxta.app, then restart Voxta.{}",
+        permission_label(accessibility),
+        permission_label(input_monitoring),
+        current_exe_hint()
+    ))
+}
+
+#[cfg(target_os = "macos")]
+fn create_macos_event_tap(
+    location: CGEventTapLocation,
+    config: Arc<RwLock<AppConfig>>,
+    state: Arc<Mutex<ShortcutState>>,
+    sender: Sender<ShortcutEvent>,
+) -> Result<CGEventTap<'static>, ()> {
+    CGEventTap::new(
+        location,
         CGEventTapPlacement::HeadInsertEventTap,
         CGEventTapOptions::Default,
         vec![
@@ -373,28 +427,49 @@ fn run_macos_event_tap(
             }
 
             let forwarded = event.clone();
-            if process_macos_shortcut_event(key_event, event.get_flags(), &config, &state, &sender)
-            {
+            if process_macos_shortcut_event(
+                key_event,
+                event.get_flags(),
+                &config,
+                state.as_ref(),
+                &sender,
+            ) {
                 forwarded.set_type(CGEventType::Null);
             }
             Some(forwarded)
         },
     )
-    .map_err(|_| {
-        "event tap unavailable; grant Accessibility and Input Monitoring permission to Voxta, then restart"
-    })?;
+}
 
-    let current = CFRunLoop::get_current();
-    let loop_source = tap
-        .mach_port
-        .create_runloop_source(0)
-        .map_err(|_| "failed to create macOS event tap run loop source")?;
-    unsafe {
-        current.add_source(&loop_source, kCFRunLoopCommonModes);
+#[cfg(target_os = "macos")]
+fn macos_event_tap_unavailable_message() -> String {
+    format!(
+        "event tap unavailable even though macOS permission checks passed. This usually means the permission entry is attached to an older rebuilt Voxta app. Quit Voxta, remove and re-add the same Voxta.app in Accessibility and Input Monitoring, or run tccutil reset Accessibility com.voxta.app and tccutil reset ListenEvent com.voxta.app, then reopen Voxta.{}",
+        current_exe_hint()
+    )
+}
+
+#[cfg(target_os = "macos")]
+fn permission_label(permission: PermissionGrant) -> &'static str {
+    match permission {
+        PermissionGrant::Granted => "granted",
+        PermissionGrant::Denied => "denied",
+        PermissionGrant::NotDetermined => "not determined",
+        PermissionGrant::NotRequired => "not required",
+        PermissionGrant::Unknown => "unknown",
     }
-    tap.enable();
-    CFRunLoop::run_current();
-    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn current_exe_hint() -> String {
+    current_exe_path()
+        .map(|path| format!(" Current executable: {}.", path.display()))
+        .unwrap_or_default()
+}
+
+#[cfg(target_os = "macos")]
+fn current_exe_path() -> Option<std::path::PathBuf> {
+    std::env::current_exe().ok()
 }
 
 #[cfg(target_os = "macos")]
