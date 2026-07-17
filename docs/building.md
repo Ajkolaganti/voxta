@@ -59,7 +59,10 @@ Expected artifacts:
 - macOS: `.dmg`
 - Windows: `.msi`
 
-Do not claim artifacts are signed unless real signing credentials were used.
+Do not publish artifacts for general users unless real signing credentials were used:
+
+- macOS must be Developer ID signed and notarized.
+- Windows installers should be Authenticode signed and timestamped.
 
 If a local macOS environment cannot create disk images, Tauri may still produce `src-tauri/target/release/bundle/macos/Voxta.app` and then fail during DMG creation with `hdiutil: create failed - Device not configured`. Document the failure and build on a normal macOS runner before publishing.
 
@@ -79,7 +82,7 @@ Keep the small tray/menu-bar shape readable, and keep transparent backgrounds wh
 
 ## Signing
 
-Repository maintainers can configure signing later through GitHub repository secrets.
+Repository maintainers configure signing through GitHub repository secrets. The release workflow fails when required signing secrets are missing, so a draft public release cannot be produced accidentally with unsigned artifacts.
 
 Suggested macOS secrets:
 
@@ -96,3 +99,5 @@ Suggested Windows secrets:
 - `WINDOWS_CERTIFICATE_PASSWORD`
 
 Exact signing commands should be validated by maintainers before enabling public signed releases.
+
+See [releasing.md](./releasing.md) for the required secrets and publication checklist.

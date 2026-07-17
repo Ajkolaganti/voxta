@@ -1,4 +1,5 @@
 use crate::{
+    ai_cleanup,
     audio::{list_input_devices, CpalAudioRecorder},
     config::AppConfig,
     error::AppResult,
@@ -6,7 +7,7 @@ use crate::{
     permissions::PermissionStatus,
     runtime::RuntimeStatus,
     transcription::cleanup::cleanup_transcript,
-    AppState,
+    voice_commands, AppState,
 };
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, State};
@@ -90,4 +91,34 @@ pub fn test_microphone(microphone_id: String) -> AppResult<String> {
 #[tauri::command]
 pub fn cleanup_test_transcript(state: State<'_, AppState>, text: String) -> String {
     cleanup_transcript(&text, &state.config.read())
+}
+
+#[tauri::command]
+pub fn test_voice_command_parser(state: State<'_, AppState>, text: String) -> String {
+    let config = state.config.read().voice_commands.clone();
+    let result = voice_commands::process_transcript(&text, &config);
+    if result.cancelled {
+        "Cancelled dictation".to_string()
+    } else {
+        result.text
+    }
+}
+
+#[tauri::command]
+pub async fn cleanup_provider_status(
+    state: State<'_, AppState>,
+) -> AppResult<ai_cleanup::ProviderStatus> {
+    let config = state.config.read().ai_cleanup.clone();
+    ai_cleanup::provider_status(&config).await
+}
+
+#[tauri::command]
+pub fn save_cleanup_api_key(api_key: String) -> AppResult<bool> {
+    ai_cleanup::save_remote_api_key(&api_key)?;
+    Ok(ai_cleanup::has_remote_api_key())
+}
+
+#[tauri::command]
+pub fn has_cleanup_api_key() -> bool {
+    ai_cleanup::has_remote_api_key()
 }

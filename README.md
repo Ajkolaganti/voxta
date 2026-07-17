@@ -2,26 +2,26 @@
 
 Voxta — Private voice typing that works everywhere.
 
-Hold a global keyboard shortcut, speak, release the shortcut, and Voxta transcribes locally with whisper.cpp and inserts the text into the app that already had focus.
+Use a global keyboard shortcut, speak, and Voxta transcribes locally with whisper.cpp and inserts the text into the app that already had focus.
 
-Voxta does not include accounts, telemetry, analytics, cloud transcription, transcript history, collaboration, payments, chat, or AI rewriting.
+Voxta does not include accounts, telemetry, analytics, cloud transcription, transcript history, collaboration, payments, or chat.
 
-Voxta does not require Ollama, API keys, or a user account. It uses a local Whisper model that you download once during setup; after that, dictation works offline.
+Voxta does not require Ollama, API keys, or a user account. It uses a local Whisper model that you download once during setup; after that, dictation works offline. Optional AI cleanup is disabled by default.
 
 ## Status
 
-Version: `0.1.0`
+Version: `0.2.0`
 
 Release label: **Early Preview**
 
-This is a first public source release candidate. It is not described as production-proven until macOS and Windows manual QA has been completed on signed release builds. Full local transcription builds require CMake because `whisper-rs` builds whisper.cpp native code.
+This is an early preview source release candidate. It is not described as production-proven until macOS and Windows manual QA has been completed on signed release builds. Full local transcription builds require CMake because `whisper-rs` builds whisper.cpp native code.
 
 ## Supported Platforms
 
 - macOS Apple Silicon: primary target
 - Windows 10 and Windows 11: primary target
 - macOS Intel: practical target
-- Linux: code is structured for later support, but Linux is not part of the 0.1.0 release
+- Linux: code is structured for later support, but Linux is not part of the early preview release
 
 Windows builds are covered by the GitHub Actions workflow configuration, but Windows runtime behavior has not been manually tested from this macOS development environment.
 
@@ -31,12 +31,12 @@ Screenshots will be added after the first signed release build.
 
 ## Installation
 
-For non-technical users, download the latest installer from GitHub Releases once maintainers publish signed binaries:
+For general users, download Voxta only from the official GitHub Releases page:
 
-- macOS: `.dmg`
-- Windows: `.msi`
+- macOS: download the signed and notarized `.dmg`, then drag `Voxta.app` to `Applications`.
+- Windows: download the signed `.msi`, then run the installer.
 
-Do not download Voxta installers from unofficial sources.
+Do not download Voxta installers from unofficial sources. See [docs/installation.md](./docs/installation.md) for step-by-step setup.
 
 ## How To Use
 
@@ -44,14 +44,32 @@ Do not download Voxta installers from unofficial sources.
 2. Complete onboarding.
 3. Download a Whisper model.
 4. Put your cursor in any editable field.
-5. Hold the configured shortcut.
+5. Use the configured shortcut.
 6. Speak.
-7. Release the shortcut.
+7. Release the shortcut in hold mode, or press it again in toggle mode.
 8. Voxta inserts the transcription at the cursor.
 
 Default shortcut: `Ctrl+Alt+Space`.
 
-You can change the shortcut in Settings.
+You can change the shortcut and shortcut behavior in Settings. Hold mode is the default. Toggle mode lets you press once to start recording and press again to stop.
+
+## Smart Dictation Preview
+
+Voxta 0.2.0 adds optional quality-of-life features:
+
+- Live transcription preview while recording. This preview is local and is not inserted into the target app.
+- Deterministic voice commands such as `Voxta new line`, `Voxta delete last word`, `Voxta undo`, and `Voxta cancel dictation`.
+- Optional AI cleanup after final local transcription. This is off by default.
+
+The reliable core workflow remains unchanged: record with the shortcut, local final transcription, insert final text.
+
+AI cleanup providers:
+
+- None: default; no cleanup is applied.
+- Ollama: uses a locally running Ollama server, usually `http://127.0.0.1:11434`.
+- OpenAI-compatible endpoint: advanced option; sends final dictated text to the configured endpoint.
+
+No API key is required unless you enable a remote endpoint that requires one. API keys are saved through operating-system credential storage, not the plain-text Voxta config file.
 
 ## Permissions
 
@@ -93,8 +111,10 @@ Voxta:
 - Does not store audio or transcript history by default.
 - Does not include analytics or telemetry SDKs.
 - Does not permanently overwrite the clipboard.
+- Keeps live preview and voice commands local.
+- Sends text to a remote cleanup endpoint only if AI cleanup is enabled and a remote provider is selected.
 
-Network access is only used for model downloads and user-opened external links. Automatic updates are not implemented in this MVP.
+Network access is used for model downloads, optional Ollama or OpenAI-compatible cleanup requests when enabled, and user-opened external links. Automatic updates are not implemented in this MVP.
 
 See [PRIVACY.md](./PRIVACY.md) for details.
 
@@ -151,6 +171,15 @@ npm run tauri:build
 
 If a local macOS environment cannot create disk images, `npm run tauri:build` may compile the optimized app and produce `Voxta.app`, then fail during DMG packaging with `hdiutil: create failed - Device not configured`. Treat that as an environment packaging failure only after confirming the `.app` bundle and release executable exist.
 
+## Publishing Releases
+
+General-user releases must be signed before publication:
+
+- macOS: Developer ID signed and notarized.
+- Windows: Authenticode signed.
+
+The GitHub release workflow requires signing secrets and creates draft prereleases with checksums. See [docs/releasing.md](./docs/releasing.md).
+
 ## Architecture
 
 Voxta uses:
@@ -177,6 +206,8 @@ See [docs/architecture.md](./docs/architecture.md).
 - macOS and Windows key-up behavior must be runtime-tested on signed app builds.
 - Clipboard fallback preserves text clipboard contents; rich clipboard formats may not be preserved on every platform.
 - Secure-field detection depends on operating-system and target-application metadata.
+- Live preview is best-effort and may skip chunks on slow machines; final transcription remains authoritative.
+- AI cleanup is preview functionality and falls back to the original transcript on failure.
 - Binaries are not claimed to be signed until maintainers configure real signing credentials.
 
 ## App Icons

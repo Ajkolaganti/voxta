@@ -1,4 +1,7 @@
-use crate::{config::AppConfig, error::AppError};
+use crate::{
+    config::{AppConfig, ShortcutBehavior},
+    error::AppError,
+};
 #[cfg(target_os = "macos")]
 use core_foundation::runloop::{kCFRunLoopCommonModes, CFRunLoop};
 #[cfg(target_os = "macos")]
@@ -174,7 +177,19 @@ impl ShortcutState {
         }
     }
 
-    fn handle(&mut self, event: KeyEvent, shortcut: &Shortcut) -> Option<ShortcutEvent> {
+    fn handle(
+        &mut self,
+        event: KeyEvent,
+        shortcut: &Shortcut,
+        behavior: ShortcutBehavior,
+    ) -> Option<ShortcutEvent> {
+        match behavior {
+            ShortcutBehavior::Hold => self.handle_hold(event, shortcut),
+            ShortcutBehavior::Toggle => self.handle_toggle(event, shortcut),
+        }
+    }
+
+    fn handle_hold(&mut self, event: KeyEvent, shortcut: &Shortcut) -> Option<ShortcutEvent> {
         match event {
             KeyEvent::Press(KeyCode::Escape) if self.active => {
                 self.active = false;
@@ -199,6 +214,39 @@ impl ShortcutState {
                 } else {
                     None
                 }
+            }
+        }
+    }
+
+    fn handle_toggle(&mut self, event: KeyEvent, shortcut: &Shortcut) -> Option<ShortcutEvent> {
+        match event {
+            KeyEvent::Press(KeyCode::Escape) if self.active => {
+                self.active = false;
+                self.pressed.clear();
+                Some(ShortcutEvent::Cancel)
+            }
+            KeyEvent::Press(key) => {
+                let was_already_pressed = !self.pressed.insert(key);
+                if was_already_pressed {
+                    return None;
+                }
+
+                if shortcut.matches(&self.pressed) {
+                    if self.active {
+                        self.active = false;
+                        self.pressed.clear();
+                        Some(ShortcutEvent::Stop)
+                    } else {
+                        self.active = true;
+                        Some(ShortcutEvent::Start)
+                    }
+                } else {
+                    None
+                }
+            }
+            KeyEvent::Release(key) => {
+                self.pressed.remove(&key);
+                None
             }
         }
     }
@@ -275,7 +323,10 @@ fn process_shortcut_event(
     state: &Mutex<ShortcutState>,
     sender: &Sender<ShortcutEvent>,
 ) -> bool {
-    let shortcut_text = config.read().shortcut.clone();
+    let (shortcut_text, behavior) = {
+        let config = config.read();
+        (config.shortcut.clone(), config.shortcut_behavior)
+    };
     let shortcut = match Shortcut::parse(&shortcut_text) {
         Ok(shortcut) => shortcut,
         Err(err) => {
@@ -285,11 +336,13 @@ fn process_shortcut_event(
     };
 
     let mut state = state.lock();
-    if let Some(shortcut_event) = state.handle(event, &shortcut) {
+    let shortcut_event = state.handle(event, &shortcut, behavior);
+    let should_swallow = shortcut_event.is_some() || state.should_swallow(event, &shortcut);
+    if let Some(shortcut_event) = shortcut_event {
         let _ = sender.send(shortcut_event);
     }
 
-    state.should_swallow(event, &shortcut)
+    should_swallow
 }
 
 #[cfg(target_os = "macos")]
@@ -362,7 +415,10 @@ fn process_macos_shortcut_event(
     state: &Mutex<ShortcutState>,
     sender: &Sender<ShortcutEvent>,
 ) -> bool {
-    let shortcut_text = config.read().shortcut.clone();
+    let (shortcut_text, behavior) = {
+        let config = config.read();
+        (config.shortcut.clone(), config.shortcut_behavior)
+    };
     let shortcut = match Shortcut::parse(&shortcut_text) {
         Ok(shortcut) => shortcut,
         Err(err) => {
@@ -378,11 +434,13 @@ fn process_macos_shortcut_event(
         return false;
     };
 
-    if let Some(shortcut_event) = state.handle(event, &shortcut) {
+    let shortcut_event = state.handle(event, &shortcut, behavior);
+    let should_swallow = shortcut_event.is_some() || state.should_swallow(event, &shortcut);
+    if let Some(shortcut_event) = shortcut_event {
         let _ = sender.send(shortcut_event);
     }
 
-    state.should_swallow(event, &shortcut)
+    should_swallow
 }
 
 #[cfg(target_os = "macos")]
@@ -620,6 +678,7 @@ fn digit_key(ch: char) -> Option<KeyCode> {
 #[cfg(test)]
 mod tests {
     use super::{KeyCode, KeyEvent, Shortcut, ShortcutEvent, ShortcutState};
+    use crate::config::ShortcutBehavior;
 
     #[test]
     fn parses_shortcut() {
@@ -632,21 +691,122 @@ mod tests {
         let shortcut = Shortcut::parse("Ctrl+Alt+Space").unwrap();
         let mut state = ShortcutState::new();
         assert_eq!(
-            state.handle(KeyEvent::Press(KeyCode::ControlLeft), &shortcut),
+            state.handle(
+                KeyEvent::Press(KeyCode::ControlLeft),
+                &shortcut,
+                ShortcutBehavior::Hold
+            ),
             None
         );
-        assert_eq!(state.handle(KeyEvent::Press(KeyCode::Alt), &shortcut), None);
         assert_eq!(
-            state.handle(KeyEvent::Press(KeyCode::Space), &shortcut),
+            state.handle(
+                KeyEvent::Press(KeyCode::Alt),
+                &shortcut,
+                ShortcutBehavior::Hold
+            ),
+            None
+        );
+        assert_eq!(
+            state.handle(
+                KeyEvent::Press(KeyCode::Space),
+                &shortcut,
+                ShortcutBehavior::Hold
+            ),
             Some(ShortcutEvent::Start)
         );
         assert_eq!(
-            state.handle(KeyEvent::Press(KeyCode::Space), &shortcut),
+            state.handle(
+                KeyEvent::Press(KeyCode::Space),
+                &shortcut,
+                ShortcutBehavior::Hold
+            ),
             None
         );
         assert_eq!(
-            state.handle(KeyEvent::Release(KeyCode::Space), &shortcut),
+            state.handle(
+                KeyEvent::Release(KeyCode::Space),
+                &shortcut,
+                ShortcutBehavior::Hold
+            ),
             Some(ShortcutEvent::Stop)
+        );
+    }
+
+    #[test]
+    fn toggle_mode_starts_and_stops_on_shortcut_presses() {
+        let shortcut = Shortcut::parse("Ctrl+Alt+Space").unwrap();
+        let mut state = ShortcutState::new();
+        assert_eq!(
+            state.handle(
+                KeyEvent::Press(KeyCode::ControlLeft),
+                &shortcut,
+                ShortcutBehavior::Toggle
+            ),
+            None
+        );
+        assert_eq!(
+            state.handle(
+                KeyEvent::Press(KeyCode::Alt),
+                &shortcut,
+                ShortcutBehavior::Toggle
+            ),
+            None
+        );
+        assert_eq!(
+            state.handle(
+                KeyEvent::Press(KeyCode::Space),
+                &shortcut,
+                ShortcutBehavior::Toggle
+            ),
+            Some(ShortcutEvent::Start)
+        );
+        assert_eq!(
+            state.handle(
+                KeyEvent::Release(KeyCode::Space),
+                &shortcut,
+                ShortcutBehavior::Toggle
+            ),
+            None
+        );
+        assert_eq!(
+            state.handle(
+                KeyEvent::Press(KeyCode::Space),
+                &shortcut,
+                ShortcutBehavior::Toggle
+            ),
+            Some(ShortcutEvent::Stop)
+        );
+    }
+
+    #[test]
+    fn toggle_mode_ignores_key_repeat_until_released() {
+        let shortcut = Shortcut::parse("Ctrl+Alt+Space").unwrap();
+        let mut state = ShortcutState::new();
+        state.handle(
+            KeyEvent::Press(KeyCode::ControlLeft),
+            &shortcut,
+            ShortcutBehavior::Toggle,
+        );
+        state.handle(
+            KeyEvent::Press(KeyCode::Alt),
+            &shortcut,
+            ShortcutBehavior::Toggle,
+        );
+        assert_eq!(
+            state.handle(
+                KeyEvent::Press(KeyCode::Space),
+                &shortcut,
+                ShortcutBehavior::Toggle
+            ),
+            Some(ShortcutEvent::Start)
+        );
+        assert_eq!(
+            state.handle(
+                KeyEvent::Press(KeyCode::Space),
+                &shortcut,
+                ShortcutBehavior::Toggle
+            ),
+            None
         );
     }
 
@@ -654,11 +814,27 @@ mod tests {
     fn escape_cancels_active_recording() {
         let shortcut = Shortcut::parse("Ctrl+Alt+Space").unwrap();
         let mut state = ShortcutState::new();
-        state.handle(KeyEvent::Press(KeyCode::ControlLeft), &shortcut);
-        state.handle(KeyEvent::Press(KeyCode::Alt), &shortcut);
-        state.handle(KeyEvent::Press(KeyCode::Space), &shortcut);
+        state.handle(
+            KeyEvent::Press(KeyCode::ControlLeft),
+            &shortcut,
+            ShortcutBehavior::Hold,
+        );
+        state.handle(
+            KeyEvent::Press(KeyCode::Alt),
+            &shortcut,
+            ShortcutBehavior::Hold,
+        );
+        state.handle(
+            KeyEvent::Press(KeyCode::Space),
+            &shortcut,
+            ShortcutBehavior::Hold,
+        );
         assert_eq!(
-            state.handle(KeyEvent::Press(KeyCode::Escape), &shortcut),
+            state.handle(
+                KeyEvent::Press(KeyCode::Escape),
+                &shortcut,
+                ShortcutBehavior::Hold
+            ),
             Some(ShortcutEvent::Cancel)
         );
     }
@@ -670,11 +846,19 @@ mod tests {
         state.pressed.insert(KeyCode::ControlLeft);
         state.pressed.insert(KeyCode::Alt);
         assert_eq!(
-            state.handle(KeyEvent::Press(KeyCode::KeyA), &shortcut),
+            state.handle(
+                KeyEvent::Press(KeyCode::KeyA),
+                &shortcut,
+                ShortcutBehavior::Hold
+            ),
             None
         );
         assert_eq!(
-            state.handle(KeyEvent::Release(KeyCode::KeyA), &shortcut),
+            state.handle(
+                KeyEvent::Release(KeyCode::KeyA),
+                &shortcut,
+                ShortcutBehavior::Hold
+            ),
             None
         );
     }

@@ -20,6 +20,7 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      - run: npm audit --audit-level=moderate
 
   rust:
     name: Rust checks (${{ matrix.os }})
@@ -76,4 +77,4 @@ jobs:
         if: runner.os == 'Windows'
         run: choco install cmake --yes
       - run: npm ci
-      - run: npm run tauri:build
+      - run: npm run tauri:build -- --ci

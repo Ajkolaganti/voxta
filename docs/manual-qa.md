@@ -1,6 +1,6 @@
 # Manual QA Checklist
 
-Run this checklist on signed or local release builds before publishing `v0.1.0`.
+Run this checklist on signed or local release builds before publishing preview builds.
 
 Record OS version, CPU architecture, Voxta version, build type, selected model, insertion mode, and shortcut before testing.
 
@@ -22,7 +22,7 @@ Record OS version, CPU architecture, Voxta version, build type, selected model, 
 ## Dictation Targets
 
 - [ ] Apple Notes.
-  Steps: open a note, place the cursor in the body, hold the shortcut, say a short sentence, release.
+  Steps: open a note, place the cursor in the body, use the configured shortcut, say a short sentence, stop recording.
   Expected: text appears in the note, focus returns to Notes, and clipboard text is preserved.
 - [ ] Chrome text field.
   Steps: open a plain text field or search box, dictate a short sentence.
@@ -69,6 +69,9 @@ Record OS version, CPU architecture, Voxta version, build type, selected model, 
   Expected: repeated key-down events do not create concurrent recordings.
 - [ ] Key-up stops recording.
   Expected: overlay changes to Transcribing and microphone capture stops.
+- [ ] Toggle shortcut mode.
+  Steps: set Shortcut behavior to `Press once to start, press again to stop`, press the shortcut, speak, release all keys, press the shortcut again.
+  Expected: recording continues after the first key release and stops only on the second shortcut press.
 - [ ] Escape cancels recording.
   Expected: no text is inserted, audio is discarded, and status returns to Idle.
 - [ ] Rapid shortcut presses.
@@ -81,6 +84,58 @@ Record OS version, CPU architecture, Voxta version, build type, selected model, 
   Expected: the new shortcut works after saving and the old shortcut no longer starts recording.
 - [ ] Recording indicator does not take focus.
   Expected: text is inserted into the app that was focused before recording.
+
+## Smart Dictation Preview
+
+- [ ] Live preview while recording.
+  Steps: enable live preview, start recording, speak for several seconds.
+  Expected: overlay shows Listening and a partial transcript that may change while speaking.
+- [ ] Final text inserted after recording stops.
+  Steps: continue the previous recording and stop recording.
+  Expected: only the final stable result is inserted into the focused app.
+- [ ] Preview disabled.
+  Steps: disable live preview and dictate.
+  Expected: overlay shows Listening without partial text; final insertion still works.
+- [ ] Slow preview fallback.
+  Steps: use Small model and Accurate preview if available.
+  Expected: preview may skip updates but does not block final transcription.
+- [ ] `Voxta new line`.
+  Steps: dictate `first line Voxta new line second line`.
+  Expected: final inserted text contains one line break.
+- [ ] `Voxta delete last word`.
+  Steps: dictate `Friday Monday Voxta delete last word`.
+  Expected: final inserted text keeps `Friday` and removes `Monday`.
+- [ ] `Voxta undo`.
+  Steps: dictate `Friday Monday Voxta delete last word Voxta undo`.
+  Expected: final inserted text includes `Friday Monday`.
+- [ ] `Voxta cancel dictation`.
+  Steps: dictate a phrase followed by `Voxta cancel dictation`.
+  Expected: recording cancels or final processing inserts nothing.
+- [ ] Natural command mode.
+  Steps: switch to Natural phrases and dictate `first line new line second line`.
+  Expected: command is applied without the prefix.
+- [ ] Command parser test.
+  Steps: enter command phrases in Settings.
+  Expected: preview result matches the expected command output.
+
+## AI Cleanup
+
+- [ ] AI cleanup disabled.
+  Expected: no cleanup provider is called and dictation works offline after model download.
+- [ ] Ollama unavailable fallback.
+  Steps: select Ollama while Ollama is not running.
+  Expected: original transcription is inserted and a non-blocking cleanup warning is shown.
+- [ ] Ollama cleanup when local model is available.
+  Steps: start Ollama, select an installed model, enable cleanup, dictate.
+  Expected: final text is cleaned locally through Ollama.
+- [ ] Remote provider warning.
+  Steps: select OpenAI-compatible endpoint.
+  Expected: Settings warns that text leaves the device.
+- [ ] Remote provider missing key.
+  Expected: cleanup fails safely and original transcription is inserted.
+- [ ] Cleanup timeout fallback.
+  Steps: configure an unreachable endpoint and short timeout.
+  Expected: original transcription is inserted after timeout.
 
 ## Clipboard
 

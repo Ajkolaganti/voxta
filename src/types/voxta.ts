@@ -1,9 +1,46 @@
 export type InsertionMode = "auto" | "direct" | "clipboard";
-export type AppStatus = "idle" | "recording" | "transcribing" | "inserting" | "paused" | "error";
+export type ShortcutBehavior = "hold" | "toggle";
+export type StreamingQuality = "fast" | "balanced" | "accurate";
+export type VoiceCommandMode = "natural" | "prefix";
+export type AiCleanupProvider = "none" | "ollama" | "openAiCompatible";
+export type CleanupStyle = "light" | "professional" | "casual" | "concise" | "custom";
+export type AppStatus =
+  | "idle"
+  | "recording"
+  | "transcribing"
+  | "applyingCommands"
+  | "cleaningUp"
+  | "inserting"
+  | "cancelled"
+  | "paused"
+  | "error";
+
+export interface StreamingConfig {
+  enabled: boolean;
+  intervalMs: number;
+  quality: StreamingQuality;
+}
+
+export interface VoiceCommandConfig {
+  enabled: boolean;
+  mode: VoiceCommandMode;
+  prefix: string;
+}
+
+export interface AiCleanupConfig {
+  enabled: boolean;
+  provider: AiCleanupProvider;
+  endpoint: string;
+  model: string;
+  style: CleanupStyle;
+  customInstructions: string;
+  timeoutSeconds: number;
+}
 
 export interface VoxtaConfig {
   enabled: boolean;
   shortcut: string;
+  shortcutBehavior: ShortcutBehavior;
   microphoneId: string;
   model: string;
   language: string;
@@ -13,6 +50,9 @@ export interface VoxtaConfig {
   trailingSpace: boolean;
   insertionMode: InsertionMode;
   onboardingComplete: boolean;
+  streaming: StreamingConfig;
+  voiceCommands: VoiceCommandConfig;
+  aiCleanup: AiCleanupConfig;
 }
 
 export interface MicrophoneDevice {
@@ -52,4 +92,10 @@ export interface ModelDownloadProgress {
   downloadedBytes: number;
   totalBytes?: number;
   done: boolean;
+}
+
+export interface CleanupProviderStatus {
+  available: boolean;
+  message: string;
+  models: string[];
 }
