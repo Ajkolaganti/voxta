@@ -31,12 +31,12 @@ Screenshots will be added after the first signed release build.
 
 ## Installation
 
-For non-technical users, download the latest installer from GitHub Releases once maintainers publish signed binaries:
+For general users, download Voxta only from the official GitHub Releases page:
 
-- macOS: `.dmg`
-- Windows: `.msi`
+- macOS: download the signed and notarized `.dmg`, then drag `Voxta.app` to `Applications`.
+- Windows: download the signed `.msi`, then run the installer.
 
-Do not download Voxta installers from unofficial sources.
+Do not download Voxta installers from unofficial sources. See [docs/installation.md](./docs/installation.md) for step-by-step setup.
 
 ## How To Use
 
@@ -170,6 +170,15 @@ npm run tauri:build
 ```
 
 If a local macOS environment cannot create disk images, `npm run tauri:build` may compile the optimized app and produce `Voxta.app`, then fail during DMG packaging with `hdiutil: create failed - Device not configured`. Treat that as an environment packaging failure only after confirming the `.app` bundle and release executable exist.
+
+## Publishing Releases
+
+General-user releases must be signed before publication:
+
+- macOS: Developer ID signed and notarized.
+- Windows: Authenticode signed.
+
+The GitHub release workflow requires signing secrets and creates draft prereleases with checksums. See [docs/releasing.md](./docs/releasing.md).
 
 ## Architecture
 

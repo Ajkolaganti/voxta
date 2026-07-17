@@ -11,61 +11,189 @@ permissions:
 
 jobs:
   build:
-    name: Build release (${{ matrix.os }})
+    name: Build signed release (${{ matrix.label }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        include:
+          - os: macos-latest
+            label: macos
+          - os: windows-latest
+            label: windows
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+
       - name: Install CMake on macOS
         if: runner.os == 'macOS'
         run: brew install cmake
+
       - name: Install CMake on Windows
         if: runner.os == 'Windows'
         run: choco install cmake --yes
+
+      - name: Require public release signing secrets
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=0
+          if [ "${RUNNER_OS}" = "macOS" ]; then
+            for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+              if [ -z "${!name:-}" ]; then
+                echo "::error::Missing required macOS signing secret: ${name}"
+                missing=1
+              fi
+            done
+          fi
+          if [ "${RUNNER_OS}" = "Windows" ]; then
+            for name in WINDOWS_CERTIFICATE WINDOWS_CERTIFICATE_PASSWORD; do
+              if [ -z "${!name:-}" ]; then
+                echo "::error::Missing required Windows signing secret: ${name}"
+                missing=1
+              fi
+            done
+          fi
+          exit "$missing"
+
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+
+      - name: Rust format
+        working-directory: src-tauri
+        run: cargo fmt --all -- --check
+
       - name: Rust tests
         working-directory: src-tauri
         run: cargo test --workspace
-      - name: Build Tauri bundles
-        run: npm run tauri:build
-      - name: Generate checksums
+
+      - name: Rust clippy
+        working-directory: src-tauri
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Import Windows signing certificate
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $pfxPath = Join-Path $env:RUNNER_TEMP "voxta-signing.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+          $securePassword = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $securePassword
+          if (-not $cert.Thumbprint) {
+            throw "Windows signing certificate import did not return a thumbprint."
+          }
+          "WINDOWS_CERTIFICATE_THUMBPRINT=$($cert.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build signed and notarized macOS bundle
+        if: runner.os == 'macOS'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npm run tauri:build -- --ci
+
+      - name: Build signed Windows installers
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $config = @{
+            bundle = @{
+              windows = @{
+                certificateThumbprint = $env:WINDOWS_CERTIFICATE_THUMBPRINT
+                timestampUrl = "http://timestamp.digicert.com"
+                tsp = $false
+              }
+            }
+          } | ConvertTo-Json -Depth 10 -Compress
+          npm run tauri:build -- --ci --config "$config"
+
+      - name: Verify macOS signing and notarization
+        if: runner.os == 'macOS'
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p release-checksums
-          find src-tauri/target/release/bundle -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.exe" \) -print0 |
+          codesign --verify --deep --strict --verbose=2 src-tauri/target/release/bundle/macos/Voxta.app
+          find src-tauri/target/release/bundle -type f -name "*.dmg" -print0 |
             while IFS= read -r -d '' file; do
+              xcrun stapler validate "$file"
+            done
+
+      - name: Verify Windows signatures
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Path src-tauri/target/release/bundle -Recurse -Include *.msi,*.exe
+          if (-not $files) {
+            throw "No Windows installer artifacts were generated."
+          }
+          foreach ($file in $files) {
+            $signature = Get-AuthenticodeSignature $file.FullName
+            if ($signature.Status -ne "Valid") {
+              throw "Invalid signature for $($file.FullName): $($signature.Status)"
+            }
+          }
+
+      - name: Collect release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME:-manual}"
+          version="${version#v}"
+          mkdir -p release-artifacts
+          found=0
+          while IFS= read -r -d '' file; do
+            found=1
+            name="$(basename "$file")"
+            cp "$file" "release-artifacts/Voxta_${version}_${{ matrix.label }}_${name}"
+          done < <(find src-tauri/target/release/bundle -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.exe" \) -print0)
+          if [ "$found" -eq 0 ]; then
+            echo "::error::No release installer artifacts were generated."
+            exit 1
+          fi
+          (
+            cd release-artifacts
+            for file in *; do
+              [ -f "$file" ] || continue
               if command -v shasum >/dev/null 2>&1; then
                 shasum -a 256 "$file"
               else
                 sha256sum "$file"
               fi
-            done > "release-checksums/checksums-${{ runner.os }}.txt"
+            done > "SHA256SUMS-${{ matrix.label }}.txt"
+          )
+
       - uses: actions/upload-artifact@v4
         with:
-          name: voxta-${{ runner.os }}
-          path: |
-            src-tauri/target/release/bundle/**/*.dmg
-            src-tauri/target/release/bundle/**/*.msi
-            src-tauri/target/release/bundle/**/*.exe
-            release-checksums/*.txt
+          name: Voxta-${{ matrix.label }}
+          path: release-artifacts/*
           if-no-files-found: error
 
   publish:
-    name: Publish GitHub Release
+    name: Publish draft GitHub Release
     runs-on: ubuntu-latest
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
@@ -73,14 +201,20 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+
       - uses: softprops/action-gh-release@v2
         with:
           name: Voxta ${{ github.ref_name }} Early Preview
           body: |
             Voxta ${{ github.ref_name }} is an Early Preview release.
 
-            Installers are not production-proven until cross-platform manual QA has completed.
-            Verify downloaded artifacts with the included SHA-256 checksum files.
+            The attached macOS and Windows installers were built by GitHub Actions and require platform signing secrets to be configured before publication.
+
+            Before making this draft public:
+            - Complete the manual QA checklist on macOS and Windows.
+            - Verify SHA-256 checksums using the included SHA256SUMS files.
+            - Confirm macOS notarization and Windows Authenticode signatures.
+            - Confirm no Whisper model binaries or local recordings are attached.
           files: artifacts/**/*
           draft: true
           prerelease: true
