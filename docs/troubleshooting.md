@@ -49,9 +49,15 @@ npm run tauri:dev
 ## Live preview does not appear
 
 - Confirm Enable live transcription preview is on in Settings.
-- Use the Fast streaming quality if the selected model is too slow.
+- Use the Tiny or Base model and Fast streaming quality if the selected model is too slow.
 - The app may skip preview chunks to avoid queueing work; final transcription should still run after release.
 - If the overlay says live preview is unavailable, continue testing final insertion first.
+- Live preview needs enough speech context to produce stable text. Short one- or two-word recordings may only appear after final transcription.
+
+## I do not want to hold the shortcut while talking
+
+Open Settings -> Shortcut -> Shortcut behavior and choose `Press once to start, press again to stop`.
+Hold mode remains the default because it is less likely to leave recording enabled by accident.
 
 ## Voice commands are typed literally
 

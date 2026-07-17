@@ -44,7 +44,22 @@ export function Onboarding({ store }: Props) {
             value={store.config.shortcut}
             onChange={(shortcut) => store.saveConfig({ shortcut })}
           />
-          <p className="hint">Hold the shortcut to record. Release it to transcribe and insert text.</p>
+          <label className="field-label" htmlFor="onboarding-shortcut-behavior">
+            Shortcut behavior
+          </label>
+          <select
+            id="onboarding-shortcut-behavior"
+            value={store.config.shortcutBehavior}
+            onChange={(event) =>
+              store.saveConfig({
+                shortcutBehavior: event.currentTarget.value as typeof store.config.shortcutBehavior
+              })
+            }
+          >
+            <option value="hold">Hold to talk</option>
+            <option value="toggle">Press once to start, press again to stop</option>
+          </select>
+          <p className="hint">Hold mode records while pressed. Toggle mode records until you press the shortcut again.</p>
         </div>
       </section>
 
@@ -67,7 +82,7 @@ export function Onboarding({ store }: Props) {
         <h2>Test dictation</h2>
         <textarea
           className="test-field"
-          placeholder="Put the cursor here, hold your shortcut, speak, then release."
+          placeholder="Put the cursor here, use your shortcut, then speak."
           aria-label="Test dictation field"
         />
       </section>

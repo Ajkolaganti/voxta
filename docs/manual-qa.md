@@ -22,7 +22,7 @@ Record OS version, CPU architecture, Voxta version, build type, selected model, 
 ## Dictation Targets
 
 - [ ] Apple Notes.
-  Steps: open a note, place the cursor in the body, hold the shortcut, say a short sentence, release.
+  Steps: open a note, place the cursor in the body, use the configured shortcut, say a short sentence, stop recording.
   Expected: text appears in the note, focus returns to Notes, and clipboard text is preserved.
 - [ ] Chrome text field.
   Steps: open a plain text field or search box, dictate a short sentence.
@@ -69,6 +69,9 @@ Record OS version, CPU architecture, Voxta version, build type, selected model, 
   Expected: repeated key-down events do not create concurrent recordings.
 - [ ] Key-up stops recording.
   Expected: overlay changes to Transcribing and microphone capture stops.
+- [ ] Toggle shortcut mode.
+  Steps: set Shortcut behavior to `Press once to start, press again to stop`, press the shortcut, speak, release all keys, press the shortcut again.
+  Expected: recording continues after the first key release and stops only on the second shortcut press.
 - [ ] Escape cancels recording.
   Expected: no text is inserted, audio is discarded, and status returns to Idle.
 - [ ] Rapid shortcut presses.
@@ -84,11 +87,11 @@ Record OS version, CPU architecture, Voxta version, build type, selected model, 
 
 ## Smart Dictation Preview
 
-- [ ] Live preview while holding the shortcut.
-  Steps: enable live preview, hold the shortcut, speak for several seconds.
+- [ ] Live preview while recording.
+  Steps: enable live preview, start recording, speak for several seconds.
   Expected: overlay shows Listening and a partial transcript that may change while speaking.
-- [ ] Final text inserted after release.
-  Steps: continue the previous recording and release the shortcut.
+- [ ] Final text inserted after recording stops.
+  Steps: continue the previous recording and stop recording.
   Expected: only the final stable result is inserted into the focused app.
 - [ ] Preview disabled.
   Steps: disable live preview and dictate.

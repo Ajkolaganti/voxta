@@ -44,14 +44,9 @@ impl StreamingSession {
             return None;
         }
 
-        let overlap = samples_for_ms(audio.sample_rate, quality.overlap_ms());
         let max_window = samples_for_ms(audio.sample_rate, quality.window_ms());
-        let start_frame = self
-            .processed_samples
-            .saturating_sub(overlap)
-            .min(frames.saturating_sub(1));
-        let bounded_start = frames.saturating_sub(max_window).max(start_frame);
-        let start = bounded_start * channels;
+        let start_frame = frames.saturating_sub(max_window);
+        let start = start_frame * channels;
         let end = frames * channels;
 
         self.processed_samples = frames;
@@ -80,24 +75,15 @@ impl StreamingSession {
 }
 
 pub trait StreamingQualityExt {
-    fn overlap_ms(self) -> u64;
     fn window_ms(self) -> u64;
 }
 
 impl StreamingQualityExt for StreamingQuality {
-    fn overlap_ms(self) -> u64 {
-        match self {
-            StreamingQuality::Fast => 200,
-            StreamingQuality::Balanced => 350,
-            StreamingQuality::Accurate => 500,
-        }
-    }
-
     fn window_ms(self) -> u64 {
         match self {
-            StreamingQuality::Fast => 2_500,
-            StreamingQuality::Balanced => 4_000,
-            StreamingQuality::Accurate => 6_000,
+            StreamingQuality::Fast => 3_000,
+            StreamingQuality::Balanced => 5_000,
+            StreamingQuality::Accurate => 8_000,
         }
     }
 }
@@ -180,6 +166,20 @@ mod tests {
             .next_chunk(&audio, StreamingQuality::Balanced)
             .unwrap();
         assert!(second.samples.len() > samples_for_ms(16_000, 500));
+    }
+
+    #[test]
+    fn live_preview_uses_a_bounded_rolling_window() {
+        let mut session = StreamingSession::new(Uuid::nil());
+        let audio = AudioBuffer {
+            sample_rate: 16_000,
+            channels: 1,
+            samples: vec![0.01; samples_for_ms(16_000, 10_000)],
+        };
+        let chunk = session
+            .next_chunk(&audio, StreamingQuality::Balanced)
+            .unwrap();
+        assert_eq!(chunk.samples.len(), samples_for_ms(16_000, 5_000));
     }
 
     #[test]

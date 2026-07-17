@@ -2,7 +2,7 @@
 
 Voxta — Private voice typing that works everywhere.
 
-Hold a global keyboard shortcut, speak, release the shortcut, and Voxta transcribes locally with whisper.cpp and inserts the text into the app that already had focus.
+Use a global keyboard shortcut, speak, and Voxta transcribes locally with whisper.cpp and inserts the text into the app that already had focus.
 
 Voxta does not include accounts, telemetry, analytics, cloud transcription, transcript history, collaboration, payments, or chat.
 
@@ -44,24 +44,24 @@ Do not download Voxta installers from unofficial sources.
 2. Complete onboarding.
 3. Download a Whisper model.
 4. Put your cursor in any editable field.
-5. Hold the configured shortcut.
+5. Use the configured shortcut.
 6. Speak.
-7. Release the shortcut.
+7. Release the shortcut in hold mode, or press it again in toggle mode.
 8. Voxta inserts the transcription at the cursor.
 
 Default shortcut: `Ctrl+Alt+Space`.
 
-You can change the shortcut in Settings.
+You can change the shortcut and shortcut behavior in Settings. Hold mode is the default. Toggle mode lets you press once to start recording and press again to stop.
 
 ## Smart Dictation Preview
 
 Voxta 0.2.0 adds optional quality-of-life features:
 
-- Live transcription preview while holding the shortcut. This preview is local and is not inserted into the target app.
+- Live transcription preview while recording. This preview is local and is not inserted into the target app.
 - Deterministic voice commands such as `Voxta new line`, `Voxta delete last word`, `Voxta undo`, and `Voxta cancel dictation`.
 - Optional AI cleanup after final local transcription. This is off by default.
 
-The reliable core workflow remains unchanged: hold shortcut, speak, release, local final transcription, insert final text.
+The reliable core workflow remains unchanged: record with the shortcut, local final transcription, insert final text.
 
 AI cleanup providers:
 

@@ -129,6 +129,24 @@ export function Settings({ store }: Props) {
             value={store.config.shortcut}
             onChange={(shortcut) => store.saveConfig({ shortcut })}
           />
+          <label className="field-label" htmlFor="shortcut-behavior">
+            Shortcut behavior
+          </label>
+          <select
+            id="shortcut-behavior"
+            value={store.config.shortcutBehavior}
+            onChange={(event) =>
+              store.saveConfig({
+                shortcutBehavior: event.currentTarget.value as typeof store.config.shortcutBehavior
+              })
+            }
+          >
+            <option value="hold">Hold to talk</option>
+            <option value="toggle">Press once to start, press again to stop</option>
+          </select>
+          <p className="hint">
+            Hold mode is the default. Toggle mode keeps listening after you release the shortcut.
+          </p>
         </div>
 
         <div className="panel">

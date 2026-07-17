@@ -1,4 +1,5 @@
 export type InsertionMode = "auto" | "direct" | "clipboard";
+export type ShortcutBehavior = "hold" | "toggle";
 export type StreamingQuality = "fast" | "balanced" | "accurate";
 export type VoiceCommandMode = "natural" | "prefix";
 export type AiCleanupProvider = "none" | "ollama" | "openAiCompatible";
@@ -39,6 +40,7 @@ export interface AiCleanupConfig {
 export interface VoxtaConfig {
   enabled: boolean;
   shortcut: string;
+  shortcutBehavior: ShortcutBehavior;
   microphoneId: string;
   model: string;
   language: string;

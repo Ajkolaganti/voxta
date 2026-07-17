@@ -16,7 +16,7 @@ Backend:
 - `src-tauri/src/audio`: microphone capture, audio buffers, resampling.
 - `src-tauri/src/config`: config persistence and validation.
 - `src-tauri/src/focus`: focused-app snapshots.
-- `src-tauri/src/hotkeys`: press-and-hold global shortcut state.
+- `src-tauri/src/hotkeys`: hold-to-talk and toggle global shortcut state.
 - `src-tauri/src/models`: model metadata, downloads, checksums, deletion.
 - `src-tauri/src/permissions`: permission status model.
 - `src-tauri/src/platform`: macOS, Windows, unsupported platform adapters.
@@ -30,13 +30,13 @@ Backend:
 
 ## Runtime Flow
 
-1. Global shortcut key-down sends `ShortcutEvent::Start`.
+1. Global shortcut key-down sends `ShortcutEvent::Start` in hold mode, or toggles recording in toggle mode.
 2. Runtime moves `Idle -> Recording`.
 3. Focus snapshot is captured.
 4. Audio worker starts a `cpal` microphone stream.
 5. Overlay shows `Listening...`.
 6. If enabled, streaming preview periodically snapshots the in-memory recording, transcribes a bounded overlapping chunk, and updates only the overlay.
-7. Shortcut key-up sends `ShortcutEvent::Stop`.
+7. Shortcut key-up sends `ShortcutEvent::Stop` in hold mode; toggle mode stops on the next shortcut key-down.
 8. Streaming preview is cancelled and stale preview results are ignored.
 9. Audio worker stops and returns the complete in-memory audio buffer.
 10. Empty or silent recordings are discarded.

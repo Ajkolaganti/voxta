@@ -16,6 +16,14 @@ pub enum InsertionMode {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub enum ShortcutBehavior {
+    #[default]
+    Hold,
+    Toggle,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum StreamingQuality {
     Fast,
     #[default]
@@ -118,6 +126,7 @@ impl Default for AiCleanupConfig {
 pub struct AppConfig {
     pub enabled: bool,
     pub shortcut: String,
+    pub shortcut_behavior: ShortcutBehavior,
     pub microphone_id: String,
     pub model: String,
     pub language: String,
@@ -137,6 +146,7 @@ impl Default for AppConfig {
         Self {
             enabled: true,
             shortcut: default_shortcut(),
+            shortcut_behavior: ShortcutBehavior::Hold,
             microphone_id: String::new(),
             model: "base".to_string(),
             language: "auto".to_string(),
