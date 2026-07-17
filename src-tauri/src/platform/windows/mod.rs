@@ -7,8 +7,9 @@ use crate::{
 #[cfg(target_os = "windows")]
 use windows::Win32::{
     Foundation::HWND,
+    System::Diagnostics::Debug::MessageBeep,
     UI::WindowsAndMessaging::{
-        GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW, MessageBeep, SetForegroundWindow,
+        GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW, SetForegroundWindow, MB_OK,
     },
 };
 
@@ -35,9 +36,9 @@ pub fn restore_focus(snapshot: &FocusSnapshot) -> AppResult<()> {
     unsafe {
         let hwnd = snapshot
             .native_window_id
-            .map(|id| HWND(id as _))
-            .unwrap_or_else(GetForegroundWindow);
-        if hwnd.0 != 0 {
+            .map(|id| HWND(id as *mut std::ffi::c_void))
+            .unwrap_or_else(|| GetForegroundWindow());
+        if !hwnd.0.is_null() {
             let restored = SetForegroundWindow(hwnd);
             if !restored.as_bool() {
                 return Err(AppError::Platform(
@@ -93,13 +94,13 @@ unsafe fn window_title(hwnd: HWND) -> Option<String> {
 pub fn play_start_sound() {
     #[cfg(target_os = "windows")]
     unsafe {
-        let _ = MessageBeep(0xFFFFFFFF);
+        let _ = MessageBeep(MB_OK);
     }
 }
 
 pub fn play_stop_sound() {
     #[cfg(target_os = "windows")]
     unsafe {
-        let _ = MessageBeep(0xFFFFFFFF);
+        let _ = MessageBeep(MB_OK);
     }
 }
