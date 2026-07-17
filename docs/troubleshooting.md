@@ -3,7 +3,7 @@
 ## The shortcut does nothing
 
 - Confirm Voxta is not paused in the tray/menu-bar menu.
-- Confirm the configured shortcut has at least one modifier and one non-modifier key.
+- Confirm the configured shortcut is either a function key such as `F8`, or a modifier combination with one trigger key.
 - On macOS, confirm Accessibility permission is enabled.
 - Try changing the shortcut in Settings.
 

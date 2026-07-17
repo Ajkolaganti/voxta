@@ -19,7 +19,11 @@ function eventToShortcut(event: KeyboardEvent): string {
 function isCompleteShortcut(shortcut: string): boolean {
   const modifiers = new Set(["Ctrl", "Meta", "Alt", "Shift"]);
   const parts = shortcut.split("+").filter(Boolean);
-  return parts.some((part) => modifiers.has(part)) && parts.some((part) => !modifiers.has(part));
+  const hasModifier = parts.some((part) => modifiers.has(part));
+  const trigger = parts.find((part) => !modifiers.has(part));
+  if (!trigger) return false;
+
+  return hasModifier || /^F([1-9]|1[0-2])$/.test(trigger);
 }
 
 export function useShortcutRecorder(initialValue: string, onCommit: (shortcut: string) => void) {

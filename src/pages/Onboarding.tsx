@@ -59,7 +59,10 @@ export function Onboarding({ store }: Props) {
             <option value="hold">Hold to talk</option>
             <option value="toggle">Press once to start, press again to stop</option>
           </select>
-          <p className="hint">Hold mode records while pressed. Toggle mode records until you press the shortcut again.</p>
+          <p className="hint">
+            Default shortcut is F8. Hold mode records while pressed. Toggle mode records until you
+            press the shortcut again.
+          </p>
         </div>
       </section>
 

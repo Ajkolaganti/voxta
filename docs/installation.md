@@ -35,7 +35,7 @@ Voxta should not be run as Administrator for normal use. Dictating into applicat
 4. Stop recording.
 5. Voxta inserts the final local transcription.
 
-Default shortcut behavior is `Hold to talk`. You can switch to `Press once to start, press again to stop` in Settings.
+Default shortcut is `F8`, and default shortcut behavior is `Hold to talk`. You can switch to `Press once to start, press again to stop` in Settings.
 
 ## Privacy During Setup
 

@@ -91,6 +91,18 @@ enum KeyCode {
     Num7,
     Num8,
     Num9,
+    F1,
+    F2,
+    F3,
+    F4,
+    F5,
+    F6,
+    F7,
+    F8,
+    F9,
+    F10,
+    F11,
+    F12,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -121,11 +133,17 @@ impl Shortcut {
                 "meta" | "cmd" | "command" | "super" | "win" | "windows" => {
                     modifiers.push(Modifier::Meta)
                 }
-                "space" => trigger = Some(KeyCode::Space),
-                "escape" | "esc" => trigger = Some(KeyCode::Escape),
+                "space" => set_trigger(&mut trigger, KeyCode::Space)?,
+                "escape" | "esc" => set_trigger(&mut trigger, KeyCode::Escape)?,
+                key if function_key(key).is_some() => {
+                    set_trigger(&mut trigger, function_key(key).unwrap())?
+                }
                 key if key.len() == 1 => {
                     let ch = key.chars().next().unwrap();
-                    trigger = letter_key(ch).or_else(|| digit_key(ch));
+                    let key = letter_key(ch).or_else(|| digit_key(ch)).ok_or_else(|| {
+                        AppError::Shortcut(format!("unsupported shortcut key: {raw}"))
+                    })?;
+                    set_trigger(&mut trigger, key)?;
                 }
                 _ => {
                     return Err(AppError::Shortcut(format!(
@@ -143,9 +161,14 @@ impl Shortcut {
         modifiers.dedup();
 
         if modifiers.is_empty() {
-            return Err(AppError::Shortcut(
-                "shortcut must include at least one modifier".to_string(),
-            ));
+            if trigger.allows_single_key_shortcut() {
+                return Ok(Self { modifiers, trigger });
+            }
+
+            return Err(AppError::Shortcut(format!(
+                "single-key shortcut {} is not allowed; use F1-F12 or add a modifier",
+                trigger.display_name()
+            )));
         }
 
         Ok(Self { modifiers, trigger })
@@ -262,6 +285,85 @@ impl ShortcutState {
 impl Default for ShortcutState {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl KeyCode {
+    fn allows_single_key_shortcut(self) -> bool {
+        matches!(
+            self,
+            KeyCode::F1
+                | KeyCode::F2
+                | KeyCode::F3
+                | KeyCode::F4
+                | KeyCode::F5
+                | KeyCode::F6
+                | KeyCode::F7
+                | KeyCode::F8
+                | KeyCode::F9
+                | KeyCode::F10
+                | KeyCode::F11
+                | KeyCode::F12
+        )
+    }
+
+    fn display_name(self) -> &'static str {
+        match self {
+            KeyCode::ControlLeft | KeyCode::ControlRight => "Ctrl",
+            KeyCode::Alt | KeyCode::AltGr => "Alt",
+            KeyCode::ShiftLeft | KeyCode::ShiftRight => "Shift",
+            KeyCode::MetaLeft | KeyCode::MetaRight => "Meta",
+            KeyCode::Space => "Space",
+            KeyCode::Escape => "Escape",
+            KeyCode::KeyA => "A",
+            KeyCode::KeyB => "B",
+            KeyCode::KeyC => "C",
+            KeyCode::KeyD => "D",
+            KeyCode::KeyE => "E",
+            KeyCode::KeyF => "F",
+            KeyCode::KeyG => "G",
+            KeyCode::KeyH => "H",
+            KeyCode::KeyI => "I",
+            KeyCode::KeyJ => "J",
+            KeyCode::KeyK => "K",
+            KeyCode::KeyL => "L",
+            KeyCode::KeyM => "M",
+            KeyCode::KeyN => "N",
+            KeyCode::KeyO => "O",
+            KeyCode::KeyP => "P",
+            KeyCode::KeyQ => "Q",
+            KeyCode::KeyR => "R",
+            KeyCode::KeyS => "S",
+            KeyCode::KeyT => "T",
+            KeyCode::KeyU => "U",
+            KeyCode::KeyV => "V",
+            KeyCode::KeyW => "W",
+            KeyCode::KeyX => "X",
+            KeyCode::KeyY => "Y",
+            KeyCode::KeyZ => "Z",
+            KeyCode::Num0 => "0",
+            KeyCode::Num1 => "1",
+            KeyCode::Num2 => "2",
+            KeyCode::Num3 => "3",
+            KeyCode::Num4 => "4",
+            KeyCode::Num5 => "5",
+            KeyCode::Num6 => "6",
+            KeyCode::Num7 => "7",
+            KeyCode::Num8 => "8",
+            KeyCode::Num9 => "9",
+            KeyCode::F1 => "F1",
+            KeyCode::F2 => "F2",
+            KeyCode::F3 => "F3",
+            KeyCode::F4 => "F4",
+            KeyCode::F5 => "F5",
+            KeyCode::F6 => "F6",
+            KeyCode::F7 => "F7",
+            KeyCode::F8 => "F8",
+            KeyCode::F9 => "F9",
+            KeyCode::F10 => "F10",
+            KeyCode::F11 => "F11",
+            KeyCode::F12 => "F12",
+        }
     }
 }
 
@@ -611,6 +713,18 @@ fn macos_keycode_to_key(keycode: u16) -> Option<KeyCode> {
         60 => Some(KeyCode::ShiftRight),
         61 => Some(KeyCode::AltGr),
         62 => Some(KeyCode::ControlRight),
+        96 => Some(KeyCode::F5),
+        97 => Some(KeyCode::F6),
+        98 => Some(KeyCode::F7),
+        99 => Some(KeyCode::F3),
+        100 => Some(KeyCode::F8),
+        101 => Some(KeyCode::F9),
+        103 => Some(KeyCode::F11),
+        109 => Some(KeyCode::F10),
+        111 => Some(KeyCode::F12),
+        118 => Some(KeyCode::F4),
+        120 => Some(KeyCode::F2),
+        122 => Some(KeyCode::F1),
         _ => None,
     }
 }
@@ -637,6 +751,18 @@ fn rdev_key_to_key(key: rdev::Key) -> Option<KeyCode> {
         rdev::Key::MetaRight => Some(KeyCode::MetaRight),
         rdev::Key::Space => Some(KeyCode::Space),
         rdev::Key::Escape => Some(KeyCode::Escape),
+        rdev::Key::F1 => Some(KeyCode::F1),
+        rdev::Key::F2 => Some(KeyCode::F2),
+        rdev::Key::F3 => Some(KeyCode::F3),
+        rdev::Key::F4 => Some(KeyCode::F4),
+        rdev::Key::F5 => Some(KeyCode::F5),
+        rdev::Key::F6 => Some(KeyCode::F6),
+        rdev::Key::F7 => Some(KeyCode::F7),
+        rdev::Key::F8 => Some(KeyCode::F8),
+        rdev::Key::F9 => Some(KeyCode::F9),
+        rdev::Key::F10 => Some(KeyCode::F10),
+        rdev::Key::F11 => Some(KeyCode::F11),
+        rdev::Key::F12 => Some(KeyCode::F12),
         rdev::Key::KeyA => Some(KeyCode::KeyA),
         rdev::Key::KeyB => Some(KeyCode::KeyB),
         rdev::Key::KeyC => Some(KeyCode::KeyC),
@@ -750,6 +876,33 @@ fn digit_key(ch: char) -> Option<KeyCode> {
     }
 }
 
+fn function_key(input: &str) -> Option<KeyCode> {
+    match input.to_ascii_lowercase().as_str() {
+        "f1" => Some(KeyCode::F1),
+        "f2" => Some(KeyCode::F2),
+        "f3" => Some(KeyCode::F3),
+        "f4" => Some(KeyCode::F4),
+        "f5" => Some(KeyCode::F5),
+        "f6" => Some(KeyCode::F6),
+        "f7" => Some(KeyCode::F7),
+        "f8" => Some(KeyCode::F8),
+        "f9" => Some(KeyCode::F9),
+        "f10" => Some(KeyCode::F10),
+        "f11" => Some(KeyCode::F11),
+        "f12" => Some(KeyCode::F12),
+        _ => None,
+    }
+}
+
+fn set_trigger(trigger: &mut Option<KeyCode>, key: KeyCode) -> Result<(), AppError> {
+    if trigger.replace(key).is_some() {
+        return Err(AppError::Shortcut(
+            "shortcut must include only one non-modifier key".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::{KeyCode, KeyEvent, Shortcut, ShortcutEvent, ShortcutState};
@@ -759,6 +912,24 @@ mod tests {
     fn parses_shortcut() {
         let shortcut = Shortcut::parse("Ctrl+Alt+Space").unwrap();
         assert_eq!(shortcut.trigger, KeyCode::Space);
+    }
+
+    #[test]
+    fn parses_single_function_key_shortcut() {
+        let shortcut = Shortcut::parse("F8").unwrap();
+        assert_eq!(shortcut.trigger, KeyCode::F8);
+        assert!(shortcut.modifiers.is_empty());
+    }
+
+    #[test]
+    fn rejects_single_typing_key_shortcut() {
+        assert!(Shortcut::parse("A").is_err());
+        assert!(Shortcut::parse("Space").is_err());
+    }
+
+    #[test]
+    fn rejects_multiple_trigger_keys() {
+        assert!(Shortcut::parse("Ctrl+Alt+Space+F8").is_err());
     }
 
     #[test]
@@ -800,6 +971,28 @@ mod tests {
         assert_eq!(
             state.handle(
                 KeyEvent::Release(KeyCode::Space),
+                &shortcut,
+                ShortcutBehavior::Hold
+            ),
+            Some(ShortcutEvent::Stop)
+        );
+    }
+
+    #[test]
+    fn single_function_key_starts_and_stops() {
+        let shortcut = Shortcut::parse("F8").unwrap();
+        let mut state = ShortcutState::new();
+        assert_eq!(
+            state.handle(
+                KeyEvent::Press(KeyCode::F8),
+                &shortcut,
+                ShortcutBehavior::Hold
+            ),
+            Some(ShortcutEvent::Start)
+        );
+        assert_eq!(
+            state.handle(
+                KeyEvent::Release(KeyCode::F8),
                 &shortcut,
                 ShortcutBehavior::Hold
             ),

@@ -12,7 +12,7 @@ const isTauri = Boolean((window as Window & { __TAURI_INTERNALS__?: unknown })._
 
 const defaultConfig: VoxtaConfig = {
   enabled: true,
-  shortcut: "Ctrl+Alt+Space",
+  shortcut: "F8",
   shortcutBehavior: "hold",
   microphoneId: "",
   model: "base",

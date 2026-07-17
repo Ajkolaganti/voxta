@@ -145,7 +145,8 @@ export function Settings({ store }: Props) {
             <option value="toggle">Press once to start, press again to stop</option>
           </select>
           <p className="hint">
-            Hold mode is the default. Toggle mode keeps listening after you release the shortcut.
+            Default shortcut is F8. Single-key shortcuts are limited to function keys to avoid
+            blocking normal typing. Toggle mode keeps listening after you release the shortcut.
           </p>
         </div>
 

@@ -49,9 +49,9 @@ Do not download Voxta installers from unofficial sources. See [docs/installation
 7. Release the shortcut in hold mode, or press it again in toggle mode.
 8. Voxta inserts the transcription at the cursor.
 
-Default shortcut: `Ctrl+Alt+Space`.
+Default shortcut: `F8`.
 
-You can change the shortcut and shortcut behavior in Settings. Hold mode is the default. Toggle mode lets you press once to start recording and press again to stop.
+You can change the shortcut and shortcut behavior in Settings. Single-key shortcuts are limited to function keys such as `F8` so Voxta does not block normal typing keys. Hold mode is the default. Toggle mode lets you press once to start recording and press again to stop.
 
 ## Smart Dictation Preview
 

@@ -164,7 +164,7 @@ impl Default for AppConfig {
 }
 
 pub fn default_shortcut() -> String {
-    "Ctrl+Alt+Space".to_string()
+    "F8".to_string()
 }
 
 impl AppConfig {
@@ -268,23 +268,39 @@ impl ConfigStore {
 
 fn is_valid_shortcut(input: &str) -> bool {
     let mut has_modifier = false;
-    let mut has_trigger = false;
+    let mut trigger_count = 0;
+    let mut single_key_allowed = false;
 
     for raw in input.split('+') {
         let part = raw.trim().to_ascii_lowercase();
         match part.as_str() {
             "ctrl" | "control" | "alt" | "option" | "shift" | "meta" | "cmd" | "command"
             | "super" | "win" | "windows" => has_modifier = true,
-            "space" | "escape" | "esc" => has_trigger = true,
+            "space" | "escape" | "esc" => trigger_count += 1,
+            key if is_function_key(key) => {
+                trigger_count += 1;
+                single_key_allowed = true;
+            }
             key if key.len() == 1 => {
                 let ch = key.chars().next().unwrap();
-                has_trigger = ch.is_ascii_alphanumeric();
+                if ch.is_ascii_alphanumeric() {
+                    trigger_count += 1;
+                } else {
+                    return false;
+                }
             }
             _ => return false,
         }
     }
 
-    has_modifier && has_trigger
+    trigger_count == 1 && (has_modifier || single_key_allowed)
+}
+
+fn is_function_key(input: &str) -> bool {
+    matches!(
+        input,
+        "f1" | "f2" | "f3" | "f4" | "f5" | "f6" | "f7" | "f8" | "f9" | "f10" | "f11" | "f12"
+    )
 }
 
 fn migrate_config_if_needed(base: PathBuf) -> AppResult<PathBuf> {
@@ -370,5 +386,18 @@ mod tests {
                 .shortcut,
             super::default_shortcut()
         );
+    }
+
+    #[test]
+    fn single_function_key_shortcut_is_valid() {
+        assert!(super::is_valid_shortcut("F8"));
+        assert!(super::is_valid_shortcut("f12"));
+    }
+
+    #[test]
+    fn single_typing_key_shortcut_is_invalid() {
+        assert!(!super::is_valid_shortcut("A"));
+        assert!(!super::is_valid_shortcut("Space"));
+        assert!(!super::is_valid_shortcut("Ctrl+Alt+Space+F8"));
     }
 }
